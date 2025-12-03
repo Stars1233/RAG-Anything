@@ -26,6 +26,21 @@ from lightrag.utils import compute_mdhash_id
 class ProcessorMixin:
     """ProcessorMixin class containing document processing functionality for RAGAnything"""
 
+    def _get_file_reference(self, file_path: str) -> str:
+        """
+        Get file reference based on use_full_path configuration.
+        
+        Args:
+            file_path: Path to the file (can be absolute or relative)
+            
+        Returns:
+            str: Full path if use_full_path is True, otherwise basename
+        """
+        if self.config.use_full_path:
+            return str(file_path)
+        else:
+            return os.path.basename(file_path)
+
     def _generate_cache_key(
         self, file_path: Path, parse_method: str = None, **kwargs
     ) -> str:
@@ -542,10 +557,7 @@ class ProcessorMixin:
             doc_id: Document ID for proper chunk association
         """
         # Use full path or basename based on config
-        if self.config.use_full_path:
-            file_name = str(file_path)
-        else:
-            file_name = os.path.basename(file_path)
+        file_name = self._get_file_reference(file_path)
 
         # Collect all chunk results for batch processing (similar to text content processing)
         all_chunk_results = []
@@ -891,10 +903,7 @@ class ProcessorMixin:
             tokens = len(self.lightrag.tokenizer.encode(formatted_chunk_content))
 
             # Use full path or basename based on config
-            if self.config.use_full_path:
-                file_ref = str(file_path)
-            else:
-                file_ref = os.path.basename(file_path)
+            file_ref = self._get_file_reference(file_path)
 
             # Build LightRAG standard chunk format
             chunks[chunk_id] = {
@@ -1032,10 +1041,7 @@ class ProcessorMixin:
         entities_to_store = {}
 
         # Use full path or basename based on config
-        if self.config.use_full_path:
-            file_ref = str(file_path)
-        else:
-            file_ref = os.path.basename(file_path)
+        file_ref = self._get_file_reference(file_path)
 
         for data in multimodal_data_list:
             entity_info = data["entity_info"]
@@ -1271,10 +1277,7 @@ class ProcessorMixin:
         pipeline_status_lock = get_pipeline_status_lock()
 
         # Use full path or basename based on config
-        if self.config.use_full_path:
-            file_ref = str(file_path)
-        else:
-            file_ref = os.path.basename(file_path)
+        file_ref = self._get_file_reference(file_path)
 
         await merge_nodes_and_edges(
             chunk_results=enhanced_chunk_results,
@@ -1498,10 +1501,7 @@ class ProcessorMixin:
         if text_content.strip():
             if file_name is None:
                 # Use full path or basename based on config
-                if self.config.use_full_path:
-                    file_name = str(file_path)
-                else:
-                    file_name = os.path.basename(file_path)
+                file_name = self._get_file_reference(file_path)
             await insert_text_content(
                 self.lightrag,
                 input=text_content,
@@ -1513,10 +1513,7 @@ class ProcessorMixin:
         else:
             # Determine file reference even if no text content
             if file_name is None:
-                if self.config.use_full_path:
-                    file_name = str(file_path)
-                else:
-                    file_name = os.path.basename(file_path)
+                file_name = self._get_file_reference(file_path)
 
         # Step 4: Process multimodal content (using specialized processors)
         if multimodal_items:
@@ -1558,10 +1555,7 @@ class ProcessorMixin:
             **kwargs: Additional parameters for parser (e.g., lang, device, start_page, end_page, formula, table, backend, source)
         """
         # Use full path or basename based on config
-        if self.config.use_full_path:
-            file_name = str(file_path)
-        else:
-            file_name = os.path.basename(file_path)
+        file_name = self._get_file_reference(file_path)
         doc_pre_id = f"doc-pre-{file_name}"
         pipeline_status = None
         pipeline_status_lock = None
@@ -1840,10 +1834,7 @@ class ProcessorMixin:
         # Step 2: Insert pure text content with all parameters
         if text_content.strip():
             # Use full path or basename based on config
-            if self.config.use_full_path:
-                file_ref = str(file_path)
-            else:
-                file_ref = os.path.basename(file_path)
+            file_ref = self._get_file_reference(file_path)
             await insert_text_content(
                 self.lightrag,
                 input=text_content,
@@ -1854,10 +1845,7 @@ class ProcessorMixin:
             )
         else:
             # Determine file reference even if no text content
-            if self.config.use_full_path:
-                file_ref = str(file_path)
-            else:
-                file_ref = os.path.basename(file_path)
+            file_ref = self._get_file_reference(file_path)
 
         # Step 3: Process multimodal content (using specialized processors)
         if multimodal_items:
