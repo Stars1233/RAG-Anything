@@ -29,10 +29,10 @@ class ProcessorMixin:
     def _get_file_reference(self, file_path: str) -> str:
         """
         Get file reference based on use_full_path configuration.
-        
+
         Args:
             file_path: Path to the file (can be absolute or relative)
-            
+
         Returns:
             str: Full path if use_full_path is True, otherwise basename
         """
