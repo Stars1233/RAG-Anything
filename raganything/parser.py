@@ -98,7 +98,7 @@ class Parser:
                 temp_path = Path(temp_dir)
 
                 # Convert to PDF using LibreOffice
-                logging.info(f"Converting {doc_path.name} to PDF using LibreOffice...")
+                logger.info(f"Converting {doc_path.name} to PDF using LibreOffice...")
 
                 # Prepare subprocess parameters to hide console window on Windows
                 import platform
@@ -140,20 +140,20 @@ class Parser:
 
                         if result.returncode == 0:
                             conversion_successful = True
-                            logging.info(
+                            logger.info(
                                 f"Successfully converted {doc_path.name} to PDF using {cmd}"
                             )
                             break
                         else:
-                            logging.warning(
+                            logger.warning(
                                 f"LibreOffice command '{cmd}' failed: {result.stderr}"
                             )
                     except FileNotFoundError:
-                        logging.warning(f"LibreOffice command '{cmd}' not found")
+                        logger.warning(f"LibreOffice command '{cmd}' not found")
                     except subprocess.TimeoutExpired:
-                        logging.warning(f"LibreOffice command '{cmd}' timed out")
+                        logger.warning(f"LibreOffice command '{cmd}' timed out")
                     except Exception as e:
-                        logging.error(
+                        logger.error(
                             f"LibreOffice command '{cmd}' failed with exception: {e}"
                         )
 
@@ -177,7 +177,7 @@ class Parser:
                     )
 
                 pdf_path = pdf_files[0]
-                logging.info(
+                logger.info(
                     f"Generated PDF: {pdf_path.name} ({pdf_path.stat().st_size} bytes)"
                 )
 
@@ -197,7 +197,7 @@ class Parser:
                 return final_pdf_path
 
         except Exception as e:
-            logging.error(f"Error in convert_office_to_pdf: {str(e)}")
+            logger.error(f"Error in convert_office_to_pdf: {str(e)}")
             raise
 
     @staticmethod
@@ -234,7 +234,7 @@ class Parser:
                     try:
                         with open(text_path, "r", encoding=encoding) as f:
                             text_content = f.read()
-                        logging.info(f"Successfully read file with {encoding} encoding")
+                        logger.info(f"Successfully read file with {encoding} encoding")
                         break
                     except UnicodeDecodeError:
                         continue
@@ -253,7 +253,7 @@ class Parser:
             pdf_path = base_output_dir / f"{text_path.stem}.pdf"
 
             # Convert text to PDF
-            logging.info(f"Converting {text_path.name} to PDF...")
+            logger.info(f"Converting {text_path.name} to PDF...")
 
             try:
                 from reportlab.lib.pagesizes import A4
@@ -270,7 +270,7 @@ class Parser:
                             "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc"
                         ).exists():
                             support_chinese = False
-                            logging.warning(
+                            logger.warning(
                                 "WenQuanYi font not found at /usr/share/fonts/wqy-microhei/wqy-microhei.ttc. Chinese characters may not render correctly."
                             )
                         else:
@@ -282,7 +282,7 @@ class Parser:
                             )
                 except Exception as e:
                     support_chinese = False
-                    logging.warning(
+                    logger.warning(
                         f"Failed to register WenQuanYi font: {e}. Chinese characters may not render correctly."
                     )
 
@@ -372,7 +372,7 @@ class Parser:
                             story.append(Spacer(1, 6))
                 else:
                     # Handle plain text files (.txt)
-                    logging.info(
+                    logger.info(
                         f"Processing plain text file with {len(text_content)} characters..."
                     )
 
@@ -401,7 +401,7 @@ class Parser:
                         story.append(Paragraph(safe_line, normal_style))
                         story.append(Spacer(1, 3))
 
-                    logging.info(f"Added {line_count} lines to PDF")
+                    logger.info(f"Added {line_count} lines to PDF")
 
                     # If no content was added, add a placeholder
                     if not story:
@@ -409,7 +409,7 @@ class Parser:
 
                 # Build PDF
                 doc.build(story)
-                logging.info(
+                logger.info(
                     f"Successfully converted {text_path.name} to PDF ({pdf_path.stat().st_size / 1024:.1f} KB)"
                 )
 
@@ -432,7 +432,7 @@ class Parser:
             return pdf_path
 
         except Exception as e:
-            logging.error(f"Error in convert_text_to_pdf: {str(e)}")
+            logger.error(f"Error in convert_text_to_pdf: {str(e)}")
             raise
 
     @staticmethod
@@ -655,7 +655,7 @@ class MineruParser(Parser):
             from queue import Queue, Empty
 
             # Log the command being executed
-            logging.info(f"Executing mineru command: {' '.join(cmd)}")
+            logger.info(f"Executing mineru command: {' '.join(cmd)}")
 
             subprocess_kwargs = {
                 "stdout": subprocess.PIPE,
@@ -708,7 +708,7 @@ class MineruParser(Parser):
                         prefix, line = stdout_queue.get_nowait()
                         output_lines.append(line)
                         # Log mineru output with INFO level, prefixed with [MinerU]
-                        logging.info(f"[MinerU] {line}")
+                        logger.info(f"[MinerU] {line}")
                 except Empty:
                     pass
 
@@ -718,13 +718,13 @@ class MineruParser(Parser):
                         prefix, line = stderr_queue.get_nowait()
                         # Log mineru errors with WARNING level
                         if "warning" in line.lower():
-                            logging.warning(f"[MinerU] {line}")
+                            logger.warning(f"[MinerU] {line}")
                         elif "error" in line.lower():
-                            logging.error(f"[MinerU] {line}")
+                            logger.error(f"[MinerU] {line}")
                             error_message = line.split("\n")[0]
                             error_lines.append(error_message)
                         else:
-                            logging.info(f"[MinerU] {line}")
+                            logger.info(f"[MinerU] {line}")
                 except Empty:
                     pass
 
@@ -738,7 +738,7 @@ class MineruParser(Parser):
                 while True:
                     prefix, line = stdout_queue.get_nowait()
                     output_lines.append(line)
-                    logging.info(f"[MinerU] {line}")
+                    logger.info(f"[MinerU] {line}")
             except Empty:
                 pass
 
@@ -746,13 +746,13 @@ class MineruParser(Parser):
                 while True:
                     prefix, line = stderr_queue.get_nowait()
                     if "warning" in line.lower():
-                        logging.warning(f"[MinerU] {line}")
+                        logger.warning(f"[MinerU] {line}")
                     elif "error" in line.lower():
-                        logging.error(f"[MinerU] {line}")
+                        logger.error(f"[MinerU] {line}")
                         error_message = line.split("\n")[0]
                         error_lines.append(error_message)
                     else:
-                        logging.info(f"[MinerU] {line}")
+                        logger.info(f"[MinerU] {line}")
             except Empty:
                 pass
 
@@ -764,17 +764,17 @@ class MineruParser(Parser):
             stderr_thread.join(timeout=5)
 
             if return_code != 0 or error_lines:
-                logging.info("[MinerU] Command executed failed")
+                logger.info("[MinerU] Command executed failed")
                 raise MineruExecutionError(return_code, error_lines)
             else:
-                logging.info("[MinerU] Command executed successfully")
+                logger.info("[MinerU] Command executed successfully")
 
         except MineruExecutionError:
             raise
         except subprocess.CalledProcessError as e:
-            logging.error(f"Error running mineru subprocess command: {e}")
-            logging.error(f"Command: {' '.join(cmd)}")
-            logging.error(f"Return code: {e.returncode}")
+            logger.error(f"Error running mineru subprocess command: {e}")
+            logger.error(f"Command: {' '.join(cmd)}")
+            logger.error(f"Return code: {e.returncode}")
             raise
         except FileNotFoundError:
             raise RuntimeError(
@@ -783,7 +783,7 @@ class MineruParser(Parser):
             )
         except Exception as e:
             error_message = f"Unexpected error running mineru command: {e}"
-            logging.error(error_message)
+            logger.error(error_message)
             raise RuntimeError(error_message) from e
 
     @staticmethod
@@ -818,7 +818,7 @@ class MineruParser(Parser):
                 with open(md_file, "r", encoding="utf-8") as f:
                     md_content = f.read()
             except Exception as e:
-                logging.warning(f"Could not read markdown file {md_file}: {e}")
+                logger.warning(f"Could not read markdown file {md_file}: {e}")
 
         # Read JSON content list
         content_list = []
@@ -828,7 +828,7 @@ class MineruParser(Parser):
                     content_list = json.load(f)
 
                 # Always fix relative paths in content_list to absolute paths
-                logging.info(
+                logger.info(
                     f"Fixing image paths in {json_file} with base directory: {images_base_dir}"
                 )
                 for item in content_list:
@@ -844,12 +844,12 @@ class MineruParser(Parser):
                                     images_base_dir / img_path
                                 ).resolve()
                                 item[field_name] = str(absolute_img_path)
-                                logging.debug(
+                                logger.debug(
                                     f"Updated {field_name}: {img_path} -> {item[field_name]}"
                                 )
 
             except Exception as e:
-                logging.warning(f"Could not read JSON file {json_file}: {e}")
+                logger.warning(f"Could not read JSON file {json_file}: {e}")
 
         return content_list, md_content
 
@@ -912,7 +912,7 @@ class MineruParser(Parser):
         except MineruExecutionError:
             raise
         except Exception as e:
-            logging.error(f"Error in parse_pdf: {str(e)}")
+            logger.error(f"Error in parse_pdf: {str(e)}")
             raise
 
     def parse_image(
@@ -970,7 +970,7 @@ class MineruParser(Parser):
 
             # If format is not natively supported by MinerU, convert it
             if ext not in mineru_supported_formats:
-                logging.info(
+                logger.info(
                     f"Converting {ext} image to PNG for MinerU compatibility..."
                 )
 
@@ -1010,7 +1010,7 @@ class MineruParser(Parser):
 
                         # Save as PNG
                         img.save(temp_converted_file, "PNG", optimize=True)
-                        logging.info(
+                        logger.info(
                             f"Successfully converted {image_path.name} to PNG ({temp_converted_file.stat().st_size / 1024:.1f} KB)"
                         )
 
@@ -1062,7 +1062,7 @@ class MineruParser(Parser):
                         pass  # Ignore cleanup errors
 
         except Exception as e:
-            logging.error(f"Error in parse_image: {str(e)}")
+            logger.error(f"Error in parse_image: {str(e)}")
             raise
 
     def parse_office_doc(
@@ -1099,7 +1099,7 @@ class MineruParser(Parser):
             )
 
         except Exception as e:
-            logging.error(f"Error in parse_office_doc: {str(e)}")
+            logger.error(f"Error in parse_office_doc: {str(e)}")
             raise
 
     def parse_text_file(
@@ -1133,7 +1133,7 @@ class MineruParser(Parser):
             )
 
         except Exception as e:
-            logging.error(f"Error in parse_text_file: {str(e)}")
+            logger.error(f"Error in parse_text_file: {str(e)}")
             raise
 
     def parse_document(
@@ -1171,7 +1171,7 @@ class MineruParser(Parser):
         elif ext in self.IMAGE_FORMATS:
             return self.parse_image(file_path, output_dir, lang, **kwargs)
         elif ext in self.OFFICE_FORMATS:
-            logging.warning(
+            logger.warning(
                 f"Warning: Office document detected ({ext}). "
                 f"MinerU 2.0 requires conversion to PDF first."
             )
@@ -1180,7 +1180,7 @@ class MineruParser(Parser):
             return self.parse_text_file(file_path, output_dir, lang, **kwargs)
         else:
             # For unsupported file types, try as PDF
-            logging.warning(
+            logger.warning(
                 f"Warning: Unsupported file extension '{ext}', "
                 f"attempting to parse as PDF"
             )
@@ -1210,10 +1210,10 @@ class MineruParser(Parser):
                 subprocess_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
             result = subprocess.run(["mineru", "--version"], **subprocess_kwargs)
-            logging.debug(f"MinerU version: {result.stdout.strip()}")
+            logger.debug(f"MinerU version: {result.stdout.strip()}")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logging.debug(
+            logger.debug(
                 "MinerU 2.0 is not properly installed. "
                 "Please install it using: pip install -U 'mineru[core]'"
             )
@@ -1287,7 +1287,7 @@ class DoclingParser(Parser):
             return content_list
 
         except Exception as e:
-            logging.error(f"Error in parse_pdf: {str(e)}")
+            logger.error(f"Error in parse_pdf: {str(e)}")
             raise
 
     def parse_document(
@@ -1388,15 +1388,15 @@ class DoclingParser(Parser):
 
             result_json = subprocess.run(cmd_json, **docling_subprocess_kwargs)
             result_md = subprocess.run(cmd_md, **docling_subprocess_kwargs)
-            logging.info("Docling command executed successfully")
+            logger.info("Docling command executed successfully")
             if result_json.stdout:
-                logging.debug(f"JSON cmd output: {result_json.stdout}")
+                logger.debug(f"JSON cmd output: {result_json.stdout}")
             if result_md.stdout:
-                logging.debug(f"Markdown cmd output: {result_md.stdout}")
+                logger.debug(f"Markdown cmd output: {result_md.stdout}")
         except subprocess.CalledProcessError as e:
-            logging.error(f"Error running docling command: {e}")
+            logger.error(f"Error running docling command: {e}")
             if e.stderr:
-                logging.error(f"Error details: {e.stderr}")
+                logger.error(f"Error details: {e.stderr}")
             raise
         except FileNotFoundError:
             raise RuntimeError(
@@ -1430,7 +1430,7 @@ class DoclingParser(Parser):
                 with open(md_file, "r", encoding="utf-8") as f:
                     md_content = f.read()
             except Exception as e:
-                logging.warning(f"Could not read markdown file {md_file}: {e}")
+                logger.warning(f"Could not read markdown file {md_file}: {e}")
 
         # Read JSON content and convert format
         content_list = []
@@ -1448,7 +1448,7 @@ class DoclingParser(Parser):
                         docling_content,
                     )
             except Exception as e:
-                logging.warning(f"Could not read or convert JSON file {json_file}: {e}")
+                logger.warning(f"Could not read or convert JSON file {json_file}: {e}")
         return content_list, md_content
 
     def read_from_block_recursive(
@@ -1525,7 +1525,7 @@ class DoclingParser(Parser):
                     "page_idx": cnt // 10,
                 }
             except Exception as e:
-                logging.warning(f"Failed to process image {num}: {e}")
+                logger.warning(f"Failed to process image {num}: {e}")
                 return {
                     "type": "text",
                     "text": f"[Image processing failed: {block.get('caption', '')}]",
@@ -1542,7 +1542,7 @@ class DoclingParser(Parser):
                     "page_idx": cnt // 10,
                 }
             except Exception as e:
-                logging.warning(f"Failed to process table {num}: {e}")
+                logger.warning(f"Failed to process table {num}: {e}")
                 return {
                     "type": "text",
                     "text": f"[Table processing failed: {block.get('caption', '')}]",
@@ -1604,7 +1604,7 @@ class DoclingParser(Parser):
             return content_list
 
         except Exception as e:
-            logging.error(f"Error in parse_office_doc: {str(e)}")
+            logger.error(f"Error in parse_office_doc: {str(e)}")
             raise
 
     def parse_html(
@@ -1662,7 +1662,7 @@ class DoclingParser(Parser):
             return content_list
 
         except Exception as e:
-            logging.error(f"Error in parse_html: {str(e)}")
+            logger.error(f"Error in parse_html: {str(e)}")
             raise
 
     def check_installation(self) -> bool:
@@ -1689,10 +1689,10 @@ class DoclingParser(Parser):
                 subprocess_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
             result = subprocess.run(["docling", "--version"], **subprocess_kwargs)
-            logging.debug(f"Docling version: {result.stdout.strip()}")
+            logger.debug(f"Docling version: {result.stdout.strip()}")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logging.debug(
+            logger.debug(
                 "Docling is not properly installed. "
                 "Please ensure it is installed correctly."
             )
