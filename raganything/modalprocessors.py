@@ -574,17 +574,31 @@ class BaseModalProcessor:
         """Extract all possible JSON candidates from response"""
         candidates = []
 
-        # Method 1: JSON in code blocks
         import re
 
-        json_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
+        # Pre-process: Remove thinking/reasoning tags that some models use
+        # This handles models like qwen2.5-think, deepseek-r1 that wrap reasoning in tags
+        cleaned_response = re.sub(
+            r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE
+        )
+        cleaned_response = re.sub(
+            r"<thinking>.*?</thinking>",
+            "",
+            cleaned_response,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+        # Method 1: JSON in code blocks
+        json_blocks = re.findall(
+            r"```(?:json)?\s*(\{.*?\})\s*```", cleaned_response, re.DOTALL
+        )
         candidates.extend(json_blocks)
 
         # Method 2: Balanced braces
         brace_count = 0
         start_pos = -1
 
-        for i, char in enumerate(response):
+        for i, char in enumerate(cleaned_response):
             if char == "{":
                 if brace_count == 0:
                     start_pos = i
@@ -592,10 +606,10 @@ class BaseModalProcessor:
             elif char == "}":
                 brace_count -= 1
                 if brace_count == 0 and start_pos != -1:
-                    candidates.append(response[start_pos : i + 1])
+                    candidates.append(cleaned_response[start_pos : i + 1])
 
         # Method 3: Simple regex fallback
-        simple_match = re.search(r"\{.*\}", response, re.DOTALL)
+        simple_match = re.search(r"\{.*\}", cleaned_response, re.DOTALL)
         if simple_match:
             candidates.append(simple_match.group(0))
 

@@ -138,11 +138,14 @@ class RAGAnything(QueryMixin, ProcessorMixin, BatchMixin):
         try:
             import asyncio
 
-            if asyncio.get_event_loop().is_running():
+            # Check if there's a running event loop using get_running_loop()
+            # This is the proper way in Python 3.10+ to avoid DeprecationWarning
+            try:
+                asyncio.get_running_loop()
                 # If we're in an async context, schedule cleanup
                 asyncio.create_task(self.finalize_storages())
-            else:
-                # Run cleanup synchronously
+            except RuntimeError:
+                # No running event loop, run cleanup synchronously
                 asyncio.run(self.finalize_storages())
         except Exception as e:
             # Use print instead of logger since logger might be cleaned up already
@@ -243,6 +246,19 @@ class RAGAnything(QueryMixin, ProcessorMixin, BatchMixin):
 
             if self.lightrag is not None:
                 # LightRAG was pre-provided, but we need to ensure it's properly initialized
+                # Inherit model functions from LightRAG if not explicitly provided
+                if self.llm_model_func is None and hasattr(
+                    self.lightrag, "llm_model_func"
+                ):
+                    self.llm_model_func = self.lightrag.llm_model_func
+                    self.logger.debug("Inherited llm_model_func from LightRAG instance")
+
+                if self.embedding_func is None and hasattr(
+                    self.lightrag, "embedding_func"
+                ):
+                    self.embedding_func = self.lightrag.embedding_func
+                    self.logger.debug("Inherited embedding_func from LightRAG instance")
+
                 try:
                     # Ensure LightRAG storages are initialized
                     if (
