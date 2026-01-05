@@ -4,12 +4,12 @@ Dry-run batch parsing example.
 Lists supported files without running any parser.
 
 Usage:
-  - pip:
+  - pip install:
       python examples/batch_dry_run_example.py examples/sample_docs --parser mineru
       python examples/batch_dry_run_example.py examples/sample_docs/projects examples/sample_docs/web --parser docling
-  - uv:
-      uv run python examples/batch_dry_run_example.py examples/sample_docs --parser mineru
-      uv run python examples/batch_dry_run_example.py examples/sample_docs/projects examples/sample_docs/web --parser docling
+  - uv install:
+      uv run python examples/batch_dry_run_example.py examples/sample_docs --parser mineru --recursive
+      uv run python examples/batch_dry_run_example.py examples/sample_docs --parser mineru --no-recursive
 """
 
 import argparse
@@ -33,7 +33,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--recursive",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Search directories recursively",
     )
