@@ -12,6 +12,7 @@ The batch processing feature allows you to process multiple documents concurrent
 - **Progress Tracking**: Real-time progress bars with `tqdm`
 - **Error Handling**: Comprehensive error reporting and recovery
 - **Flexible Input**: Support for files, directories, and recursive search
+- **Dry Run**: Preview which files would be processed without running parsers
 - **Configurable Workers**: Adjustable number of parallel workers
 - **Installation Check Bypass**: Optional skip for environments with package conflicts
 
@@ -118,13 +119,16 @@ print(f"Total processing time: {result['total_processing_time']:.2f} seconds")
 
 ```bash
 # Basic batch processing
-python -m raganything.batch_parser path/to/docs/ --output ./output --workers 4
+python -m raganything.batch_parser examples/sample_docs/ --output ./output --workers 4
 
 # With specific parser
-python -m raganything.batch_parser path/to/docs/ --parser mineru --method auto
+python -m raganything.batch_parser examples/sample_docs/ --parser mineru --method auto
 
 # Without progress bar
-python -m raganything.batch_parser path/to/docs/ --output ./output --no-progress
+python -m raganything.batch_parser examples/sample_docs/ --output ./output --no-progress
+
+# Dry run (list supported files without processing)
+python -m raganything.batch_parser examples/sample_docs/ --output ./output --dry-run
 
 # Help
 python -m raganything.batch_parser --help
@@ -170,6 +174,7 @@ class BatchProcessingResult:
     processing_time: float           # Total processing time in seconds
     errors: Dict[str, str]           # Error messages for failed files
     output_dir: str                  # Output directory used
+    dry_run: bool                    # True if run was a dry-run
 
     def summary(self) -> str:        # Human-readable summary
     def success_rate(self) -> float: # Success rate as percentage
