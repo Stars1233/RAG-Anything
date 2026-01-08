@@ -830,7 +830,7 @@ class MineruParser(Parser):
                         f"Found MinerU output in subdirectory: {subdir.name}"
                     )
                     break
-            
+
             # Fallback to method-based path if scanning didn't find output
             if not found:
                 cls.logger.debug(
