@@ -619,7 +619,7 @@ class MineruParser(Parser):
             table: Enable table parsing
             device: Inference device
             source: Model source
-            vlm_url: When the backend is `vlm-sglang-client`, you need to specify the server_url
+            vlm_url: When the backend is `vlm-http-client`, you need to specify the server_url
         """
         cmd = [
             "mineru",
@@ -1766,9 +1766,9 @@ def main():
         choices=[
             "pipeline",
             "hybrid-auto-engine",
-            "vlm-transformers",
-            "vlm-sglang-engine",
-            "vlm-sglang-client",
+            "hybrid-http-client",
+            "vlm-auto-engine",
+            "vlm-http-client",
         ],
         default="pipeline",
         help="Parsing backend",
@@ -1810,7 +1810,7 @@ def main():
     )
     parser.add_argument(
         "--vlm_url",
-        help="When the backend is `vlm-sglang-client`, you need to specify the server_url, for example:`http://127.0.0.1:30000`",
+        help="When the backend is `vlm-http-client`, you need to specify the server_url, for example:`http://127.0.0.1:30000`",
     )
 
     args = parser.parse_args()
