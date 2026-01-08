@@ -929,7 +929,13 @@ class MineruParser(Parser):
             )
 
             # Read the generated output files
-            # Map backend to expected output directory name
+            # Map backend to expected output directory name for better compatibility
+            # MinerU 2.7.0+ uses different directory names based on backend:
+            # - pipeline -> auto/
+            # - vlm-* -> vlm/
+            # - hybrid-* -> hybrid_auto/
+            # Note: _read_output_files() will scan subdirectories automatically,
+            # so this mapping is just for optimization and fallback
             backend = kwargs.get("backend", "")
             if backend.startswith("vlm-"):
                 method = "vlm"
@@ -1759,6 +1765,7 @@ def main():
         "-b",
         choices=[
             "pipeline",
+            "hybrid-auto-engine",
             "vlm-transformers",
             "vlm-sglang-engine",
             "vlm-sglang-client",
