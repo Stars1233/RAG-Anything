@@ -801,6 +801,7 @@ class MineruParser(Parser):
         Args:
             output_dir: Output directory
             file_stem: File name without extension
+            method: Parsing method (used as fallback if subdirectory scan fails)
 
         Returns:
             Tuple containing (content list JSON, Markdown text)
@@ -812,9 +813,32 @@ class MineruParser(Parser):
 
         file_stem_subdir = output_dir / file_stem
         if file_stem_subdir.exists():
-            md_file = file_stem_subdir / method / f"{file_stem}.md"
-            json_file = file_stem_subdir / method / f"{file_stem}_content_list.json"
-            images_base_dir = file_stem_subdir / method
+            # Scan for actual output subdirectory instead of assuming method name
+            found = False
+            for subdir in file_stem_subdir.iterdir():
+                if not subdir.is_dir():
+                    continue
+                # Check if this subdirectory contains the expected JSON output file
+                candidate_json = subdir / f"{file_stem}_content_list.json"
+                if candidate_json.exists():
+                    # Found the actual output directory
+                    md_file = subdir / f"{file_stem}.md"
+                    json_file = candidate_json
+                    images_base_dir = subdir
+                    found = True
+                    cls.logger.info(
+                        f"Found MinerU output in subdirectory: {subdir.name}"
+                    )
+                    break
+            
+            # Fallback to method-based path if scanning didn't find output
+            if not found:
+                cls.logger.debug(
+                    f"No output found by scanning, falling back to method-based path: {method}"
+                )
+                md_file = file_stem_subdir / method / f"{file_stem}.md"
+                json_file = file_stem_subdir / method / f"{file_stem}_content_list.json"
+                images_base_dir = file_stem_subdir / method
 
         # Read markdown content
         md_content = ""
@@ -905,9 +929,12 @@ class MineruParser(Parser):
             )
 
             # Read the generated output files
+            # Map backend to expected output directory name
             backend = kwargs.get("backend", "")
             if backend.startswith("vlm-"):
                 method = "vlm"
+            elif backend.startswith("hybrid-") and method == "auto":
+                method = "hybrid_auto"
 
             content_list, _ = self._read_output_files(
                 base_output_dir, name_without_suff, method=method
