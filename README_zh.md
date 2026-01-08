@@ -1068,7 +1068,7 @@ await rag.process_document_complete(
     end_page=10,                 # 结束页码（0为基准，适用于PDF）
     formula=True,                # 启用公式解析
     table=True,                  # 启用表格解析
-    backend="pipeline",          # 解析后端：pipeline|vlm-transformers|vlm-sglang-engine|vlm-sglang-client
+    backend="pipeline",          # 解析后端：pipeline|hybrid-auto-engine|vlm-transformers|vlm-sglang-engine|vlm-sglang-client
     source="huggingface",        # 模型源："huggingface", "modelscope", "local"
     # vlm_url="http://127.0.0.1:3000" # 当backend=vlm-sglang-client时，需指定服务地址
 
