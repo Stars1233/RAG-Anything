@@ -936,7 +936,8 @@ class MineruParser(Parser):
             # - hybrid-* -> hybrid_auto/
             # Note: _read_output_files() will scan subdirectories automatically,
             # so this mapping is just for optimization and fallback
-            backend = kwargs.get("backend", "")
+            # Use `or ""` to handle both missing keys and explicit None values
+            backend = kwargs.get("backend") or ""
             if backend.startswith("vlm-"):
                 method = "vlm"
             elif backend.startswith("hybrid-"):
