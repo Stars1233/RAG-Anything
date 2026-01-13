@@ -812,7 +812,7 @@ class MineruParser(Parser):
         images_base_dir = output_dir  # Base directory for images
 
         file_stem_subdir = output_dir / file_stem
-        if file_stem_subdir.exists():
+        if file_stem_subdir.is_dir():
             # Scan for actual output subdirectory instead of assuming method name
             found = False
             for subdir in file_stem_subdir.iterdir():
@@ -939,7 +939,7 @@ class MineruParser(Parser):
             backend = kwargs.get("backend", "")
             if backend.startswith("vlm-"):
                 method = "vlm"
-            elif backend.startswith("hybrid-") and method == "auto":
+            elif backend.startswith("hybrid-"):
                 method = "hybrid_auto"
 
             content_list, _ = self._read_output_files(
