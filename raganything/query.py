@@ -568,12 +568,34 @@ class QueryMixin:
                 return match.group(0)  # Keep original
 
             # Use utility function to validate image file
-            self.logger.debug(f"Calling validate_image_file for: {image_path}")
             is_valid = validate_image_file(image_path)
-            self.logger.debug(f"Validation result for {image_path}: {is_valid}")
+            
+            # Security check: only allow images from the workspace or output directories
+            # to prevent indirect prompt injection from reading arbitrary system files.
+            if is_valid:
+                abs_image_path = Path(image_path).resolve()
+                # Check if it's in the current working directory or subdirectories
+                try:
+                    is_in_cwd = abs_image_path.is_relative_to(Path.cwd())
+                except ValueError:
+                    is_in_cwd = False
+                
+                # If a config is available, check against working_dir and parser_output_dir
+                is_in_safe_dir = is_in_cwd
+                if hasattr(self, "config") and self.config:
+                    try:
+                        is_in_working = abs_image_path.is_relative_to(Path(self.config.working_dir).resolve())
+                        is_in_output = abs_image_path.is_relative_to(Path(self.config.parser_output_dir).resolve())
+                        is_in_safe_dir = is_in_safe_dir or is_in_working or is_in_output
+                    except Exception:
+                        pass
+                
+                if not is_in_safe_dir:
+                    self.logger.warning(f"Blocking image path outside safe directories: {image_path}")
+                    is_valid = False
 
             if not is_valid:
-                self.logger.warning(f"Image validation failed for: {image_path}")
+                self.logger.warning(f"Image validation failed or path unsafe for: {image_path}")
                 return match.group(0)  # Keep original if validation fails
 
             try:
