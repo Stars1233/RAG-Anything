@@ -69,6 +69,9 @@ extras_require = {
         "reportlab>=4.0.0",
         "paddleocr>=2.7.0",
         "pypdfium2>=4.25.0",
+        "markdown>=3.4.0",
+        "weasyprint>=60.0",
+        "pygments>=2.10.0",
     ],  # All optional features
     "markdown": [
         "markdown>=3.4.0",

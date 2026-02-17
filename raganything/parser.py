@@ -2044,6 +2044,7 @@ class PaddleOCRParser(Parser):
     def check_installation(self) -> bool:
         try:
             self._require_paddleocr()
+            import pypdfium2  # noqa: F401
             return True
         except ImportError:
             return False
