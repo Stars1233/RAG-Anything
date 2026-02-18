@@ -94,6 +94,30 @@ def test_parse_image_returns_content_list_schema(monkeypatch, tmp_path):
     ]
 
 
+def test_parse_image_preserves_repeated_ocr_lines(monkeypatch, tmp_path):
+    parser = PaddleOCRParser()
+    fake_image = tmp_path / "sample.png"
+    fake_image.write_bytes(b"image-bytes")
+
+    class FakeOCR:
+        def ocr(self, input_data, cls=True):
+            return [
+                [
+                    [[[0, 0], [1, 0], [1, 1], [0, 1]], ("Same", 0.99)],
+                    [[[0, 2], [1, 2], [1, 3], [0, 3]], ("Same", 0.95)],
+                ]
+            ]
+
+    monkeypatch.setattr(parser, "_get_ocr", lambda lang=None: FakeOCR())
+
+    content_list = parser.parse_image(fake_image, page_idx=1)
+
+    assert content_list == [
+        {"type": "text", "text": "Same", "page_idx": 1},
+        {"type": "text", "text": "Same", "page_idx": 1},
+    ]
+
+
 def test_parse_pdf_assigns_page_index(monkeypatch, tmp_path):
     parser = PaddleOCRParser()
     fake_pdf = tmp_path / "sample.pdf"

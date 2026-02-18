@@ -26,6 +26,7 @@ from typing import (
     Union,
     Tuple,
     Any,
+    Iterator,
     TypeVar,
 )
 
@@ -1789,15 +1790,17 @@ class PaddleOCRParser(Parser):
 
     def _extract_text_lines(self, result: Any) -> List[str]:
         lines: List[str] = []
-        seen = set()
 
-        def append_text(text: str):
+        def append_text(text: str) -> None:
             clean_text = text.strip()
-            if clean_text and clean_text not in seen:
-                seen.add(clean_text)
+            if clean_text:
                 lines.append(clean_text)
 
-        def visit(node: Any):
+        if isinstance(result, str):
+            append_text(result)
+            return lines
+
+        def visit(node: Any) -> None:
             if node is None:
                 return
 
@@ -1829,11 +1832,20 @@ class PaddleOCRParser(Parser):
                         else:
                             visit(item)
 
-                for value in node.values():
+                # Avoid double-visiting keys we already handled above; this prevents
+                # accidental duplication without content-level deduplication.
+                for key, value in node.items():
+                    if key in {"rec_texts", "text", "texts"}:
+                        continue
                     visit(value)
                 return
 
             if isinstance(node, (list, tuple)):
+                if node and all(isinstance(item, str) for item in node):
+                    for item in node:
+                        append_text(item)
+                    return
+
                 if (
                     len(node) >= 2
                     and isinstance(node[1], (list, tuple))
@@ -1857,6 +1869,7 @@ class PaddleOCRParser(Parser):
 
             if isinstance(node, str):
                 append_text(node)
+                return
 
         visit(result)
         return lines
@@ -1881,7 +1894,7 @@ class PaddleOCRParser(Parser):
             "Unsupported PaddleOCR API: expected `ocr` or `predict` method."
         )
 
-    def _extract_pdf_page_inputs(self, pdf_path: Path) -> List[Tuple[int, Any]]:
+    def _extract_pdf_page_inputs(self, pdf_path: Path) -> Iterator[Tuple[int, Any]]:
         try:
             import pypdfium2 as pdfium
         except ImportError as exc:
@@ -1891,7 +1904,6 @@ class PaddleOCRParser(Parser):
                 "`uv sync --extra paddleocr`."
             ) from exc
 
-        page_inputs: List[Tuple[int, Any]] = []
         pdf = pdfium.PdfDocument(str(pdf_path))
         try:
             total_pages = len(pdf)
@@ -1900,9 +1912,9 @@ class PaddleOCRParser(Parser):
                 try:
                     rendered = page.render(scale=2.0)
                     if hasattr(rendered, "to_pil"):
-                        page_inputs.append((page_idx, rendered.to_pil()))
+                        yield (page_idx, rendered.to_pil())
                     elif hasattr(rendered, "to_numpy"):
-                        page_inputs.append((page_idx, rendered.to_numpy()))
+                        yield (page_idx, rendered.to_numpy())
                     else:
                         raise RuntimeError(
                             "Unsupported rendered page format from pypdfium2."
@@ -1913,8 +1925,6 @@ class PaddleOCRParser(Parser):
         finally:
             if hasattr(pdf, "close"):
                 pdf.close()
-
-        return page_inputs
 
     def _ocr_rendered_page(
         self, rendered_page: Any, lang: Optional[str] = None, cls_enabled: bool = True
@@ -1952,14 +1962,21 @@ class PaddleOCRParser(Parser):
 
         cls_enabled = kwargs.get("cls", True)
         content_list: List[Dict[str, Any]] = []
-        for page_idx, rendered_page in self._extract_pdf_page_inputs(pdf_path):
-            page_lines = self._ocr_rendered_page(
-                rendered_page, lang=lang, cls_enabled=cls_enabled
-            )
-            for text in page_lines:
-                content_list.append(
-                    {"type": "text", "text": text, "page_idx": int(page_idx)}
+        page_inputs = self._extract_pdf_page_inputs(pdf_path)
+        try:
+            for page_idx, rendered_page in page_inputs:
+                page_lines = self._ocr_rendered_page(
+                    rendered_page, lang=lang, cls_enabled=cls_enabled
                 )
+                for text in page_lines:
+                    content_list.append(
+                        {"type": "text", "text": text, "page_idx": int(page_idx)}
+                    )
+        finally:
+            # Ensure we promptly release PDF handles even if OCR fails mid-stream.
+            close = getattr(page_inputs, "close", None)
+            if callable(close):
+                close()
         return content_list
 
     def parse_image(
@@ -2045,6 +2062,7 @@ class PaddleOCRParser(Parser):
         try:
             self._require_paddleocr()
             import pypdfium2  # noqa: F401
+
             return True
         except ImportError:
             return False
