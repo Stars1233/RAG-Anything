@@ -64,7 +64,9 @@ class Parser:
         pass
 
     @staticmethod
-    def _unique_output_dir(base_dir: Union[str, Path], file_path: Union[str, Path]) -> Path:
+    def _unique_output_dir(
+        base_dir: Union[str, Path], file_path: Union[str, Path]
+    ) -> Path:
         """Create a unique output subdirectory for a file to prevent same-name collisions.
 
         When multiple files share the same name (e.g. dir1/paper.pdf and dir2/paper.pdf),
