@@ -105,9 +105,7 @@ class VLLMRAGIntegration:
         self.embedding_base_url = os.getenv(
             "EMBEDDING_BINDING_HOST", "http://localhost:8001/v1"
         )
-        self.embedding_api_key = os.getenv(
-            "EMBEDDING_BINDING_API_KEY", "token-abc123"
-        )
+        self.embedding_api_key = os.getenv("EMBEDDING_BINDING_API_KEY", "token-abc123")
 
         # RAG-Anything configuration
         # Use a fresh working directory each run to avoid legacy doc_status schema conflicts
