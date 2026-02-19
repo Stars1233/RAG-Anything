@@ -879,6 +879,7 @@ class MineruParser(Parser):
                                     cls.logger.warning(
                                         f"Potential path traversal detected in {field_name}: {img_path}. Skipping."
                                     )
+                                    item[field_name] = ""  # Clear unsafe path
                                     continue
 
                                 item[field_name] = str(absolute_img_path)
