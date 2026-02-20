@@ -1392,18 +1392,12 @@ class DoclingParser(Parser):
         file_output_dir = Path(output_dir) / file_stem / "docling"
         file_output_dir.mkdir(parents=True, exist_ok=True)
 
-        cmd_json = [
+        cmd = [
             "docling",
             "--output",
             str(file_output_dir),
             "--to",
             "json",
-            str(input_path),
-        ]
-        cmd_md = [
-            "docling",
-            "--output",
-            str(file_output_dir),
             "--to",
             "md",
             str(input_path),
@@ -1425,13 +1419,10 @@ class DoclingParser(Parser):
             if platform.system() == "Windows":
                 docling_subprocess_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-            result_json = subprocess.run(cmd_json, **docling_subprocess_kwargs)
-            result_md = subprocess.run(cmd_md, **docling_subprocess_kwargs)
+            result = subprocess.run(cmd, **docling_subprocess_kwargs)
             self.logger.info("Docling command executed successfully")
-            if result_json.stdout:
-                self.logger.debug(f"JSON cmd output: {result_json.stdout}")
-            if result_md.stdout:
-                self.logger.debug(f"Markdown cmd output: {result_md.stdout}")
+            if result.stdout:
+                self.logger.debug(f"JSON and Markdown cmd output: {result.stdout}")
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Error running docling command: {e}")
             if e.stderr:
