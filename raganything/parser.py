@@ -856,6 +856,25 @@ class MineruParser(Parser):
                 with open(json_file, "r", encoding="utf-8") as f:
                     content_list = json.load(f)
 
+                # Normalize MinerU 2.0 field names to expected names for backward compatibility.
+                # MinerU 2.0 renamed: img_caption -> image_caption, img_footnote -> image_footnote
+                # The codebase primarily uses image_caption/image_footnote with img_caption/img_footnote
+                # as fallback, but we ensure both fields exist so downstream code works regardless.
+                _FIELD_ALIASES = {
+                    # MinerU 1.x name -> MinerU 2.0 name (canonical)
+                    "img_caption": "image_caption",
+                    "img_footnote": "image_footnote",
+                }
+                for item in content_list:
+                    if isinstance(item, dict):
+                        for old_name, new_name in _FIELD_ALIASES.items():
+                            # If only the old field exists, copy it to the new field name
+                            if old_name in item and new_name not in item:
+                                item[new_name] = item[old_name]
+                            # If only the new field exists, copy it to the old field name (for any legacy code)
+                            elif new_name in item and old_name not in item:
+                                item[old_name] = item[new_name]
+
                 # Always fix relative paths in content_list to absolute paths
                 cls.logger.info(
                     f"Fixing image paths in {json_file} with base directory: {images_base_dir}"
