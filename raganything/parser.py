@@ -891,10 +891,17 @@ class MineruParser(Parser):
                                 absolute_img_path = (
                                     images_base_dir / img_path
                                 ).resolve()
+
+                                # Security check: ensure the image path is within the base directory
+                                resolved_base = images_base_dir.resolve()
+                                if not absolute_img_path.is_relative_to(resolved_base):
+                                    cls.logger.warning(
+                                        f"Potential path traversal detected in {field_name}: {img_path}. Skipping."
+                                    )
+                                    item[field_name] = ""  # Clear unsafe path
+                                    continue
+
                                 item[field_name] = str(absolute_img_path)
-                                cls.logger.debug(
-                                    f"Updated {field_name}: {img_path} -> {item[field_name]}"
-                                )
 
             except Exception as e:
                 cls.logger.warning(f"Could not read JSON file {json_file}: {e}")
