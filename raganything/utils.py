@@ -97,7 +97,7 @@ def validate_image_file(image_path: str, max_size_mb: int = 50) -> bool:
         if not path.exists():
             logger.warning(f"Image file not found: {image_path}")
             return False
-            
+
         if path.is_symlink():
             logger.warning(f"Blocking symlink for security: {image_path}")
             return False
