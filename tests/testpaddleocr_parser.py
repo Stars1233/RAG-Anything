@@ -37,7 +37,7 @@ def test_check_installation_false_when_dependency_missing(monkeypatch):
     assert parser.check_installation() is False
 
 
-def test_check_installation_false_when_pdf_renderer_missing(monkeypatch):
+def test_check_installation_true_when_pdf_renderer_missing(monkeypatch):
     parser = PaddleOCRParser()
 
     monkeypatch.setattr(parser, "_require_paddleocr", lambda: object())
@@ -53,7 +53,29 @@ def test_check_installation_false_when_pdf_renderer_missing(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    assert parser.check_installation() is False
+    assert parser.check_installation() is True
+
+
+def test_parse_pdf_raises_import_error_when_pdf_renderer_missing(monkeypatch, tmp_path):
+    parser = PaddleOCRParser()
+    fake_pdf = tmp_path / "sample.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4\n")
+
+    monkeypatch.setattr(parser, "_require_paddleocr", lambda: object())
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "pypdfium2":
+            raise ImportError("missing pypdfium2")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(ImportError, match="pypdfium2"):
+        parser.parse_pdf(fake_pdf)
 
 
 def test_parse_image_raises_import_error_with_install_hint(monkeypatch, tmp_path):

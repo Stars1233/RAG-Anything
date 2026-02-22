@@ -332,7 +332,10 @@ class ProcessorMixin:
         ext = file_path.suffix.lower()
 
         try:
-            doc_parser = get_parser(self.config.parser)
+            doc_parser = getattr(self, "doc_parser", None)
+            if doc_parser is None:
+                doc_parser = get_parser(self.config.parser)
+                self.doc_parser = doc_parser
 
             # Log parser and method information
             self.logger.info(

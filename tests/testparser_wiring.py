@@ -71,10 +71,11 @@ async def test_processor_parse_document_uses_selected_parser(monkeypatch, tmp_pa
         def parse_document(self, **kwargs):
             return [{"type": "text", "text": "generic parsed", "page_idx": 0}]
 
-    selected = {}
+    selected = {"calls": 0}
 
     def fake_get_parser(parser_name):
         selected["parser_name"] = parser_name
+        selected["calls"] += 1
         return FakeParser()
 
     monkeypatch.setattr(processor_module, "get_parser", fake_get_parser)
@@ -117,9 +118,15 @@ async def test_processor_parse_document_uses_selected_parser(monkeypatch, tmp_pa
     fake_pdf.write_bytes(b"%PDF-1.4\n")
 
     content_list, doc_id = await dummy.parse_document(str(fake_pdf))
+    content_list_2, doc_id_2 = await dummy.parse_document(str(fake_pdf))
 
     assert selected["parser_name"] == "paddleocr"
+    assert selected["calls"] == 1
     assert doc_id == "doc-fixed"
+    assert doc_id_2 == "doc-fixed"
     assert content_list == [
+        {"type": "text", "text": "parsed by fake parser", "page_idx": 0}
+    ]
+    assert content_list_2 == [
         {"type": "text", "text": "parsed by fake parser", "page_idx": 0}
     ]
