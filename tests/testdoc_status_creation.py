@@ -169,3 +169,89 @@ async def test_process_document_complete_bootstraps_doc_status(
     assert doc_status["file_path"] == "sample.pdf"
     assert doc_status["status"] == DocStatus.PROCESSED
     assert doc_status["multimodal_processed"] is True
+
+
+@pytest.mark.asyncio
+async def test_image_only_document_falls_back_when_multimodal_flag_is_unsupported(
+    raganything_modules,
+    tmp_path,
+):
+    processor_module = raganything_modules.processor
+    DocStatus = raganything_modules.base.DocStatus
+
+    class FakeDocStatusStorage:
+        def __init__(self):
+            self.records = {}
+
+        async def get_by_id(self, key):
+            return self.records.get(key)
+
+        async def upsert(self, data):
+            for key, value in data.items():
+                if "multimodal_processed" in value:
+                    raise ValueError("unknown field: multimodal_processed")
+                self.records[key] = value
+
+        async def index_done_callback(self):
+            return None
+
+    class FakeLightRAG:
+        def __init__(self):
+            self.doc_status = FakeDocStatusStorage()
+
+        async def ainsert(self, **kwargs):
+            return None
+
+    class DummyProcessor(processor_module.ProcessorMixin):
+        pass
+
+    processor = DummyProcessor()
+    processor.lightrag = FakeLightRAG()
+    processor.logger = types.SimpleNamespace(
+        info=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        debug=lambda *args, **kwargs: None,
+    )
+    processor.config = types.SimpleNamespace(
+        parser_output_dir=str(tmp_path / "output"),
+        parse_method="auto",
+        display_content_stats=False,
+        use_full_path=False,
+        content_format="default",
+    )
+
+    async def fake_ensure_lightrag_initialized():
+        return {"success": True}
+
+    async def fake_parse_document(
+        file_path, output_dir, parse_method, display_stats, **kwargs
+    ):
+        return (
+            [
+                {
+                    "type": "image",
+                    "img_path": str(tmp_path / "figure.png"),
+                    "page_idx": 0,
+                }
+            ],
+            "doc-image",
+        )
+
+    async def fake_process_multimodal_content(multimodal_items, file_name, doc_id):
+        await processor._mark_multimodal_processing_complete(doc_id)
+
+    processor._ensure_lightrag_initialized = fake_ensure_lightrag_initialized
+    processor.parse_document = fake_parse_document
+    processor._process_multimodal_content = fake_process_multimodal_content
+
+    await processor.process_document_complete(
+        file_path=str(tmp_path / "figure.png"),
+        doc_id="doc-image",
+        file_name="figure.png",
+    )
+
+    doc_status = processor.lightrag.doc_status.records["doc-image"]
+    assert doc_status["file_path"] == "figure.png"
+    assert doc_status["status"] == DocStatus.PROCESSED
+    assert "multimodal_processed" not in doc_status

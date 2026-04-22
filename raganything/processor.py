@@ -1475,16 +1475,29 @@ class ProcessorMixin:
                 final_status = current_doc_status.get("status") or DocStatus.PROCESSED
                 if final_status != DocStatus.FAILED:
                     final_status = DocStatus.PROCESSED
-                await self.lightrag.doc_status.upsert(
-                    {
-                        doc_id: {
-                            **current_doc_status,
-                            "status": final_status,
-                            "multimodal_processed": True,
-                            "updated_at": self._current_doc_status_timestamp(),
-                        }
+                update_payload = {
+                    **current_doc_status,
+                    "status": final_status,
+                    "multimodal_processed": True,
+                    "updated_at": self._current_doc_status_timestamp(),
+                }
+                try:
+                    await self.lightrag.doc_status.upsert({doc_id: update_payload})
+                except Exception as exc:
+                    # Older LightRAG versions reject unknown doc_status fields such as
+                    # multimodal_processed. Fall back to a schema-compatible status-only
+                    # update so image-only and multimodal documents still complete.
+                    self.logger.debug(
+                        "Falling back to schema-compatible doc_status update for %s: %s",
+                        doc_id,
+                        exc,
+                    )
+                    fallback_payload = {
+                        **current_doc_status,
+                        "status": final_status,
+                        "updated_at": self._current_doc_status_timestamp(),
                     }
-                )
+                    await self.lightrag.doc_status.upsert({doc_id: fallback_payload})
                 await self.lightrag.doc_status.index_done_callback()
                 self.logger.debug(
                     f"Marked multimodal content processing as complete for document {doc_id}"
