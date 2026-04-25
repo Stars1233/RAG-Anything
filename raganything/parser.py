@@ -32,6 +32,7 @@ import argparse
 import base64
 import subprocess
 import tempfile
+import threading
 import logging
 import time
 import urllib.parse
@@ -1459,6 +1460,33 @@ class DoclingParser(Parser):
     models on every call. A `DocumentConverter` instance is built lazily on first
     use and cached per pipeline-option combination so that subsequent parses
     against the same configuration reuse already-loaded models.
+
+    Compatibility changes vs. earlier CLI-subprocess implementation
+    ----------------------------------------------------------------
+    - `check_installation()` now returns True iff the Docling Python package
+      can be imported (`docling.document_converter.DocumentConverter`). The
+      previous behavior of probing the `docling` CLI executable on PATH is
+      gone; environments that ship the CLI without the importable package
+      (or vice versa) will see a different result than before.
+    - The legacy `env={...}` kwarg is still accepted for source-level
+      compatibility but is **ignored**: the Python API does not run a
+      subprocess, so per-call environment overrides no longer take effect.
+      Callers needing model-cache, proxy, or CUDA configuration should set
+      the corresponding environment variables in the parent process before
+      instantiating `DoclingParser`, or configure Docling directly via
+      `_get_converter` kwargs (`artifacts_path`, `table_mode`, ...).
+    - JSON and Markdown artifacts are still written to
+      `<output_dir>/<file_stem>/docling/` for backward compatibility, but
+      they are produced by Docling's `export_to_dict()` /
+      `export_to_markdown()` rather than by the CLI's serializer; expect the
+      same logical content but not byte-identical files (key ordering,
+      whitespace, optional fields may differ).
+
+    Concurrency
+    -----------
+    The internal converter cache is guarded by a lock so that a single
+    `DoclingParser` instance can be safely shared across threads without
+    duplicating Docling model loads on first use.
     """
 
     # Define Docling-specific formats
@@ -1469,7 +1497,11 @@ class DoclingParser(Parser):
         super().__init__()
         # Cache of DocumentConverter instances keyed by pipeline-option tuple,
         # so that loaded layout/OCR/table models are reused across calls.
+        # The lock guards concurrent first-use from creating duplicate
+        # converters (and re-loading models) when the same DoclingParser
+        # instance is shared across threads.
         self._converter_cache: Dict[Tuple, Any] = {}
+        self._converter_cache_lock = threading.Lock()
 
     def parse_pdf(
         self,
@@ -1616,6 +1648,9 @@ class DoclingParser(Parser):
         artifacts_path = kwargs.get("artifacts_path")
 
         cache_key = (table_mode, do_tables, do_ocr, artifacts_path)
+        # Fast path: snapshot read outside the lock (dict reads are atomic in
+        # CPython for hashable keys) so the common cache-hit case stays
+        # contention-free.
         cached = self._converter_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -1645,13 +1680,23 @@ class DoclingParser(Parser):
         if hasattr(pipeline_options, "images_scale"):
             pipeline_options.images_scale = 2.0
 
-        converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-            }
-        )
-        self._converter_cache[cache_key] = converter
-        return converter
+        # Slow path: serialize converter construction so that concurrent
+        # first-use against the same cache_key doesn't load Docling's models
+        # twice. We re-check the cache under the lock to avoid a double build
+        # when two threads race past the fast-path check above.
+        with self._converter_cache_lock:
+            cached = self._converter_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(
+                        pipeline_options=pipeline_options
+                    ),
+                }
+            )
+            self._converter_cache[cache_key] = converter
+            return converter
 
     def _run_docling_python(
         self,
@@ -1980,6 +2025,15 @@ class DoclingParser(Parser):
         Returns:
             bool: True if `docling.document_converter.DocumentConverter` can be
                 imported, False otherwise.
+
+        Note:
+            This is a behavior change from the previous CLI-subprocess
+            implementation, which probed the `docling` executable on PATH.
+            Some environments may have the CLI installed without the Python
+            package (or vice versa) and will therefore see a different
+            result. The Python-API path is what `parse_pdf`,
+            `parse_office_doc`, and `parse_html` actually exercise, so this
+            check is now a faithful pre-flight for those entry points.
         """
         try:
             from docling.document_converter import DocumentConverter  # noqa: F401
