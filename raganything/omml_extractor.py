@@ -265,6 +265,22 @@ def enrich_content_list_with_docx_equations(
     equations become indexable LaTeX text) but not for visual reconstruction.
     Callers needing positional accuracy can post-process the list using the
     ``raw_omml`` field returned by :func:`extract_omml_equations`.
+
+    Limitations
+    -----------
+    - Deduplication compares the LaTeX ``text`` field exactly. It will
+      therefore not match parser-emitted placeholder strings (e.g. ``"[FORMULA]"``)
+      nor LaTeX produced by image-based equation OCR in MinerU/Docling, even
+      when they semantically refer to the same equation. If a parser already
+      emits LaTeX for some equations you may see both versions; pass
+      ``deduplicate_existing_equations=False`` and post-process if you need
+      a stricter merge policy.
+    - All extracted equations are appended at the end of the returned list
+      with ``page_idx`` copied from the last existing block (or ``0`` when
+      the input is empty). Treat ``page_idx`` on enriched equations as a
+      retrieval hint rather than a precise page-level location; use
+      ``raw_omml`` to splice back into the correct position when ordering
+      matters.
     """
     extracted = extract_omml_equations(docx_path)
     if not extracted:
@@ -392,7 +408,14 @@ def _first_child(element: ET.Element, tag: str) -> Optional[ET.Element]:
     return children[0] if children else None
 
 
-def _convert_children(element: ET.Element) -> str:
+def _convert_children(element: Optional[ET.Element]) -> str:
+    # Tolerate a missing child element: handlers like _h_fraction or
+    # _h_radical pass the result of _first_child() directly here, which can
+    # be None when the source DOCX is malformed (a fraction without m:num,
+    # a radical without m:e, ...). Returning "" keeps the converter on its
+    # recall-over-correctness contract instead of raising.
+    if element is None:
+        return ""
     parts = []
     for child in element:
         parts.append(_convert(child))
@@ -490,13 +513,19 @@ def _h_nary(element: ET.Element) -> str:
     # m:nary — n-ary operator (sum, integral, etc.). The operator character
     # lives in m:naryPr/m:chr/@m:val; defaults to the integral sign per ECMA-376.
     pr = _first_child(element, "naryPr")
+    # ECMA-376 §22.1.2.74: when m:chr is absent the operator defaults to
+    # the integral sign. When m:chr is present but its value is not in our
+    # LaTeX table, fall back to the original Unicode character rather than
+    # silently rewriting it to \int — preserving the symbol keeps the
+    # equation searchable for downstream RAG even when the operator is
+    # exotic (e.g. \bigsqcup, \bigwedge, custom math fonts).
     op = r"\int"
     if pr is not None:
         chr_elem = _first_child(pr, "chr")
         if chr_elem is not None:
             val = chr_elem.get(_M + "val")
             if val:
-                op = _NARY_OPERATORS.get(val, op)
+                op = _NARY_OPERATORS.get(val, val)
     sub = _first_child(element, "sub")
     sup = _first_child(element, "sup")
     base = _first_child(element, "e")

@@ -218,6 +218,44 @@ class TestOmmlToLatex:
         assert omml_to_latex(elem) == r"a\leqb"
 
 
+class TestRobustness:
+    """Malformed OMML and unknown-operator fallbacks should degrade gracefully."""
+
+    def test_fraction_missing_numerator(self):
+        elem = _wrap_in_omath(
+            "<m:f><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>"
+        )
+        # Empty numerator, no exception.
+        assert omml_to_latex(elem) == r"\frac{}{b}"
+
+    def test_fraction_missing_denominator(self):
+        elem = _wrap_in_omath(
+            "<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num></m:f>"
+        )
+        assert omml_to_latex(elem) == r"\frac{a}{}"
+
+    def test_superscript_missing_base(self):
+        elem = _wrap_in_omath(
+            "<m:sSup><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>"
+        )
+        assert omml_to_latex(elem) == "{}^{2}"
+
+    def test_radical_missing_base(self):
+        elem = _wrap_in_omath("<m:rad></m:rad>")
+        assert omml_to_latex(elem) == r"\sqrt{}"
+
+    def test_unknown_nary_operator_preserved(self):
+        # \u2A06 (N-ARY SQUARE UNION OPERATOR) is not in our table; the raw
+        # Unicode character should survive instead of being rewritten to \int.
+        elem = _wrap_in_omath(
+            "<m:nary>"
+            '<m:naryPr><m:chr m:val="\u2a06"/></m:naryPr>'
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>"
+            "</m:nary>"
+        )
+        assert omml_to_latex(elem) == "\u2a06 x"
+
+
 class TestExtractFromDocx:
     """End-to-end extraction from in-memory DOCX archives."""
 
