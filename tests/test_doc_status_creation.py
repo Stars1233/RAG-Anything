@@ -9,6 +9,21 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+class InMemoryJsonStorage:
+    def __init__(self):
+        self.records = {}
+
+    async def get_by_id(self, key):
+        return self.records.get(key)
+
+    async def upsert(self, data):
+        for key, value in data.items():
+            self.records[key] = value
+
+    async def index_done_callback(self):
+        return None
+
+
 def _load_raganything_module(module_name: str, relative_path: str):
     module_path = PROJECT_ROOT / relative_path
     spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -136,6 +151,7 @@ async def test_process_document_complete_bootstraps_doc_status(
 
     processor = DummyProcessor()
     processor.lightrag = FakeLightRAG()
+    processor.multimodal_status_cache = InMemoryJsonStorage()
     processor.logger = types.SimpleNamespace(
         info=lambda *args, **kwargs: None,
         warning=lambda *args, **kwargs: None,
@@ -207,6 +223,7 @@ async def test_image_only_document_falls_back_when_multimodal_flag_is_unsupporte
 
     processor = DummyProcessor()
     processor.lightrag = FakeLightRAG()
+    processor.multimodal_status_cache = InMemoryJsonStorage()
     processor.logger = types.SimpleNamespace(
         info=lambda *args, **kwargs: None,
         warning=lambda *args, **kwargs: None,
@@ -255,3 +272,81 @@ async def test_image_only_document_falls_back_when_multimodal_flag_is_unsupporte
     assert doc_status["file_path"] == "figure.png"
     assert doc_status["status"] == DocStatus.PROCESSED
     assert "multimodal_processed" not in doc_status
+    assert processor.multimodal_status_cache.records["doc-image"] == {
+        "multimodal_processed": True,
+        "updated_at": doc_status["updated_at"],
+    }
+
+    processing_status = await processor.get_document_processing_status("doc-image")
+    assert processing_status["multimodal_processed"] is True
+    assert processing_status["fully_processed"] is True
+    assert await processor.is_document_fully_processed("doc-image") is True
+
+
+@pytest.mark.asyncio
+async def test_compatibility_multimodal_cache_prevents_repeat_processing(
+    raganything_modules,
+):
+    processor_module = raganything_modules.processor
+    DocStatus = raganything_modules.base.DocStatus
+
+    class FakeDocStatusStorage:
+        def __init__(self):
+            self.records = {
+                "doc-image": {
+                    "status": DocStatus.PROCESSED,
+                    "file_path": "figure.png",
+                }
+            }
+
+        async def get_by_id(self, key):
+            return self.records.get(key)
+
+    class FakeMultimodalStatusStorage:
+        def __init__(self):
+            self.records = {
+                "doc-image": {
+                    "multimodal_processed": True,
+                    "updated_at": "2026-04-22T00:00:00+00:00",
+                }
+            }
+
+        async def get_by_id(self, key):
+            return self.records.get(key)
+
+    class FakeLightRAG:
+        def __init__(self):
+            self.doc_status = FakeDocStatusStorage()
+
+    class DummyProcessor(processor_module.ProcessorMixin):
+        pass
+
+    processor = DummyProcessor()
+    processor.lightrag = FakeLightRAG()
+    processor.multimodal_status_cache = FakeMultimodalStatusStorage()
+    processor.logger = types.SimpleNamespace(
+        info=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        debug=lambda *args, **kwargs: None,
+    )
+    processor.callback_manager = None
+
+    async def fake_ensure_lightrag_initialized():
+        return {"success": True}
+
+    called = {"batch": 0}
+
+    async def fake_batch_type_aware(*args, **kwargs):
+        called["batch"] += 1
+
+    processor._ensure_lightrag_initialized = fake_ensure_lightrag_initialized
+    processor._process_multimodal_content_batch_type_aware = fake_batch_type_aware
+
+    await processor._process_multimodal_content(
+        [{"type": "image", "img_path": "figure.png"}],
+        "figure.png",
+        "doc-image",
+    )
+
+    assert called["batch"] == 0

@@ -152,6 +152,47 @@ class ProcessorMixin:
         await self.lightrag.doc_status.index_done_callback()
         return updated_doc_status
 
+    async def _get_multimodal_status_record(self, doc_id: str) -> Dict[str, Any] | None:
+        """Get compatibility multimodal completion state when doc_status cannot store it."""
+        if (
+            not hasattr(self, "multimodal_status_cache")
+            or self.multimodal_status_cache is None
+        ):
+            return None
+
+        return await self.multimodal_status_cache.get_by_id(doc_id)
+
+    async def _set_multimodal_status_record(self, doc_id: str, processed: bool) -> None:
+        """Persist multimodal completion state in a separate KV namespace."""
+        if (
+            not hasattr(self, "multimodal_status_cache")
+            or self.multimodal_status_cache is None
+        ):
+            return
+
+        await self.multimodal_status_cache.upsert(
+            {
+                doc_id: {
+                    "multimodal_processed": processed,
+                    "updated_at": self._current_doc_status_timestamp(),
+                }
+            }
+        )
+        await self.multimodal_status_cache.index_done_callback()
+
+    async def _get_multimodal_processed_flag(
+        self, doc_id: str, doc_status: Dict[str, Any] | None = None
+    ) -> bool:
+        """Read multimodal completion state from doc_status or compatibility cache."""
+        if doc_status is not None and "multimodal_processed" in doc_status:
+            return bool(doc_status.get("multimodal_processed", False))
+
+        compatibility_status = await self._get_multimodal_status_record(doc_id)
+        if compatibility_status is not None:
+            return bool(compatibility_status.get("multimodal_processed", False))
+
+        return False
+
     def _generate_content_based_doc_id(self, content_list: List[Dict[str, Any]]) -> str:
         """
         Generate doc_id based on document content
@@ -597,8 +638,8 @@ class ProcessorMixin:
             existing_doc_status = await self.lightrag.doc_status.get_by_id(doc_id)
             if existing_doc_status:
                 # Check if multimodal content is already processed
-                multimodal_processed = existing_doc_status.get(
-                    "multimodal_processed", False
+                multimodal_processed = await self._get_multimodal_processed_flag(
+                    doc_id, existing_doc_status
                 )
 
                 if multimodal_processed:
@@ -1498,6 +1539,7 @@ class ProcessorMixin:
                         "updated_at": self._current_doc_status_timestamp(),
                     }
                     await self.lightrag.doc_status.upsert({doc_id: fallback_payload})
+                    await self._set_multimodal_status_record(doc_id, True)
                 await self.lightrag.doc_status.index_done_callback()
                 self.logger.debug(
                     f"Marked multimodal content processing as complete for document {doc_id}"
@@ -1523,7 +1565,9 @@ class ProcessorMixin:
                 return False
 
             text_processed = doc_status.get("status") == DocStatus.PROCESSED
-            multimodal_processed = doc_status.get("multimodal_processed", False)
+            multimodal_processed = await self._get_multimodal_processed_flag(
+                doc_id, doc_status
+            )
 
             return text_processed and multimodal_processed
 
@@ -1555,7 +1599,9 @@ class ProcessorMixin:
                 }
 
             text_processed = doc_status.get("status") == DocStatus.PROCESSED
-            multimodal_processed = doc_status.get("multimodal_processed", False)
+            multimodal_processed = await self._get_multimodal_processed_flag(
+                doc_id, doc_status
+            )
             fully_processed = text_processed and multimodal_processed
 
             return {
