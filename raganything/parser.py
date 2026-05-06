@@ -1690,9 +1690,7 @@ class DoclingParser(Parser):
                 return cached
             converter = DocumentConverter(
                 format_options={
-                    InputFormat.PDF: PdfFormatOption(
-                        pipeline_options=pipeline_options
-                    ),
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
                 }
             )
             self._converter_cache[cache_key] = converter

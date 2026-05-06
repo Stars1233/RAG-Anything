@@ -169,8 +169,13 @@ async def test_process_document_complete_bootstraps_doc_status(
     async def fake_ensure_lightrag_initialized():
         return {"success": True}
 
-    async def fake_parse_document(file_path, output_dir, parse_method, display_stats, **kwargs):
-        return ([{"type": "text", "text": "hello from test", "page_idx": 0}], "doc-generated")
+    async def fake_parse_document(
+        file_path, output_dir, parse_method, display_stats, **kwargs
+    ):
+        return (
+            [{"type": "text", "text": "hello from test", "page_idx": 0}],
+            "doc-generated",
+        )
 
     processor._ensure_lightrag_initialized = fake_ensure_lightrag_initialized
     processor.parse_document = fake_parse_document

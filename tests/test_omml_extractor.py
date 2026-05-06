@@ -222,22 +222,16 @@ class TestRobustness:
     """Malformed OMML and unknown-operator fallbacks should degrade gracefully."""
 
     def test_fraction_missing_numerator(self):
-        elem = _wrap_in_omath(
-            "<m:f><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>"
-        )
+        elem = _wrap_in_omath("<m:f><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>")
         # Empty numerator, no exception.
         assert omml_to_latex(elem) == r"\frac{}{b}"
 
     def test_fraction_missing_denominator(self):
-        elem = _wrap_in_omath(
-            "<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num></m:f>"
-        )
+        elem = _wrap_in_omath("<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num></m:f>")
         assert omml_to_latex(elem) == r"\frac{a}{}"
 
     def test_superscript_missing_base(self):
-        elem = _wrap_in_omath(
-            "<m:sSup><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>"
-        )
+        elem = _wrap_in_omath("<m:sSup><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>")
         assert omml_to_latex(elem) == "{}^{2}"
 
     def test_radical_missing_base(self):
