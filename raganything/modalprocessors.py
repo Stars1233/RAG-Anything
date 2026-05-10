@@ -28,6 +28,12 @@ from lightrag.operate import extract_entities, merge_nodes_and_edges
 
 # Import prompt templates
 from raganything.prompt import PROMPTS
+from raganything.utils import (
+    format_table_body,
+    get_equation_text_and_format,
+    get_table_body,
+    normalize_caption_list,
+)
 
 
 @dataclass
@@ -1094,9 +1100,9 @@ class TableModalProcessor(BaseModalProcessor):
                 content_data = modal_content
 
             table_img_path = content_data.get("img_path")
-            table_caption = content_data.get("table_caption", [])
-            table_body = content_data.get("table_body", "")
-            table_footnote = content_data.get("table_footnote", [])
+            table_caption = normalize_caption_list(content_data.get("table_caption"))
+            table_body = format_table_body(get_table_body(content_data))
+            table_footnote = normalize_caption_list(content_data.get("table_footnote"))
 
             # Extract context for current item
             context = ""
@@ -1181,9 +1187,9 @@ class TableModalProcessor(BaseModalProcessor):
                 content_data = modal_content
 
             table_img_path = content_data.get("img_path")
-            table_caption = content_data.get("table_caption", [])
-            table_body = content_data.get("table_body", "")
-            table_footnote = content_data.get("table_footnote", [])
+            table_caption = normalize_caption_list(content_data.get("table_caption"))
+            table_body = format_table_body(get_table_body(content_data))
+            table_footnote = normalize_caption_list(content_data.get("table_footnote"))
 
             # Build complete table content
             modal_chunk = PROMPTS["table_chunk"].format(
@@ -1288,8 +1294,7 @@ class EquationModalProcessor(BaseModalProcessor):
             else:
                 content_data = modal_content
 
-            equation_text = content_data.get("text")
-            equation_format = content_data.get("text_format", "")
+            equation_text, equation_format = get_equation_text_and_format(content_data)
 
             # Extract context for current item
             context = ""
@@ -1369,8 +1374,7 @@ class EquationModalProcessor(BaseModalProcessor):
             else:
                 content_data = modal_content
 
-            equation_text = content_data.get("text")
-            equation_format = content_data.get("text_format", "")
+            equation_text, equation_format = get_equation_text_and_format(content_data)
 
             # Build complete equation content
             modal_chunk = PROMPTS["equation_chunk"].format(

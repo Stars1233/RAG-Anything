@@ -18,6 +18,10 @@ from raganything.utils import (
     insert_text_content,
     insert_text_content_with_multimodal_content,
     get_processor_for_type,
+    format_table_body,
+    get_equation_text_and_format,
+    get_table_body,
+    normalize_caption_list,
 )
 import asyncio
 from lightrag.utils import compute_mdhash_id
@@ -756,7 +760,7 @@ class ProcessorMixin:
                     # Prepare item info for context extraction
                     item_info = {
                         "page_idx": item.get("page_idx", 0),
-                        "index": i,
+                        "index": item.get("_content_list_index", i),
                         "type": content_type,
                     }
 
@@ -934,7 +938,7 @@ class ProcessorMixin:
 
                     item_info = {
                         "page_idx": item.get("page_idx", 0),
-                        "index": index,
+                        "index": item.get("_content_list_index", index),
                         "type": content_type,
                     }
 
@@ -1119,11 +1123,15 @@ class ProcessorMixin:
         try:
             if content_type == "image":
                 image_path = original_item.get("img_path", "")
-                captions = original_item.get(
-                    "image_caption", original_item.get("img_caption", [])
+                captions = normalize_caption_list(
+                    original_item.get(
+                        "image_caption", original_item.get("img_caption", [])
+                    )
                 )
-                footnotes = original_item.get(
-                    "image_footnote", original_item.get("img_footnote", [])
+                footnotes = normalize_caption_list(
+                    original_item.get(
+                        "image_footnote", original_item.get("img_footnote", [])
+                    )
                 )
 
                 return PROMPTS["image_chunk"].format(
@@ -1135,9 +1143,13 @@ class ProcessorMixin:
 
             elif content_type == "table":
                 table_img_path = original_item.get("img_path", "")
-                table_caption = original_item.get("table_caption", [])
-                table_body = original_item.get("table_body", "")
-                table_footnote = original_item.get("table_footnote", [])
+                table_caption = normalize_caption_list(
+                    original_item.get("table_caption", [])
+                )
+                table_body = format_table_body(get_table_body(original_item))
+                table_footnote = normalize_caption_list(
+                    original_item.get("table_footnote", [])
+                )
 
                 return PROMPTS["table_chunk"].format(
                     table_img_path=table_img_path,
@@ -1150,8 +1162,9 @@ class ProcessorMixin:
                 )
 
             elif content_type == "equation":
-                equation_text = original_item.get("text", "")
-                equation_format = original_item.get("text_format", "")
+                equation_text, equation_format = get_equation_text_and_format(
+                    original_item
+                )
 
                 return PROMPTS["equation_chunk"].format(
                     equation_text=equation_text,
