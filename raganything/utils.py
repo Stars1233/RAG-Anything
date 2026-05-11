@@ -11,6 +11,81 @@ from pathlib import Path
 from lightrag.utils import logger
 
 
+def normalize_caption_list(value: Any) -> List[str]:
+    """Return captions and footnotes as a clean list of strings."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def get_table_body(item: Dict[str, Any]) -> Any:
+    """Read table content across common content-list alias fields."""
+    if item.get("table_body") not in (None, ""):
+        return item.get("table_body")
+    if item.get("table_data") not in (None, ""):
+        return item.get("table_data")
+    return item.get("text", "")
+
+
+def format_table_body(table_body: Any) -> str:
+    """Serialize table content for prompts and chunks without dropping aliases.
+
+    Strings are passed through unchanged. List-of-lists (the common
+    ``table_data`` shape from non-MinerU parsers) are rendered as a simple
+    Markdown table so the LLM sees structured rows instead of a Python repr.
+    Other shapes fall back to a newline-joined string of ``str(...)`` items.
+    """
+    if isinstance(table_body, str):
+        return table_body
+    if isinstance(table_body, list):
+        if not table_body:
+            return ""
+        if all(isinstance(row, (list, tuple)) for row in table_body):
+            rendered_rows = [
+                "| " + " | ".join(str(cell) for cell in row) + " |"
+                for row in table_body
+            ]
+            if len(rendered_rows) >= 1:
+                column_count = max(len(row) for row in table_body)
+                separator = "| " + " | ".join(["---"] * column_count) + " |"
+                rendered_rows.insert(1, separator)
+            return "\n".join(rendered_rows)
+        return "\n".join(str(row) for row in table_body)
+    return str(table_body)
+
+
+def get_equation_text_and_format(item: Dict[str, Any]) -> Tuple[str, str]:
+    """Read equation content while preserving LaTeX aliases from content lists.
+
+    Field priority follows MinerU first (``text`` + ``text_format``), then
+    falls back to ``latex`` and ``equation`` aliases used by other parsers.
+    The textual description is intentionally NOT concatenated into the
+    equation body: the ``equation_chunk`` template has a separate
+    ``enhanced_caption`` slot for that.
+    """
+    text = str(item.get("text", "") or "").strip()
+    latex = str(item.get("latex", "") or "").strip()
+    equation = str(item.get("equation", "") or "").strip()
+    equation_format = str(item.get("text_format", "") or "").strip()
+
+    if text:
+        equation_text = text
+    elif latex:
+        equation_text = latex
+        if not equation_format:
+            equation_format = "latex"
+    elif equation:
+        equation_text = equation
+    else:
+        equation_text = ""
+
+    return equation_text, equation_format
+
+
 def separate_content(
     content_list: List[Dict[str, Any]],
 ) -> Tuple[str, List[Dict[str, Any]]]:
@@ -26,7 +101,7 @@ def separate_content(
     text_parts = []
     multimodal_items = []
 
-    for item in content_list:
+    for index, item in enumerate(content_list):
         content_type = item.get("type", "text")
 
         if content_type == "text":
@@ -36,7 +111,9 @@ def separate_content(
                 text_parts.append(text)
         else:
             # Multimodal content (image, table, equation, etc.)
-            multimodal_items.append(item)
+            multimodal_item = dict(item)
+            multimodal_item.setdefault("_content_list_index", index)
+            multimodal_items.append(multimodal_item)
 
     # Merge all text content
     text_content = "\n\n".join(text_parts)
