@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,14 @@ _SPEC.loader.exec_module(_asset_urls)
 attach_public_media_urls = _asset_urls.attach_public_media_urls
 public_url_for_local_path = _asset_urls.public_url_for_local_path
 MEDIA_PATH_FIELDS = _asset_urls.MEDIA_PATH_FIELDS
+_MISCONFIG_WARNED = _asset_urls._MISCONFIG_WARNED
+
+
+@pytest.fixture(autouse=True)
+def _clear_misconfig_state():
+    _MISCONFIG_WARNED.clear()
+    yield
+    _MISCONFIG_WARNED.clear()
 
 
 def test_public_url_builds_from_strip_prefix(tmp_path: Path):
@@ -45,24 +54,17 @@ def test_attach_respects_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv(
         "RAGANYTHING_PUBLIC_ASSET_BASE_URL", "https://bucket.s3.amazonaws.com/proj"
     )
-    monkeypatch.setenv(
-        "RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX", str(root.resolve())
-    )
+    monkeypatch.setenv("RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX", str(root.resolve()))
 
     item: dict = {"type": "image", "img_path": str(img.resolve())}
     attach_public_media_urls(item)
 
     assert item["img_path"] == str(img.resolve())
-    assert (
-        item["img_path_public_url"]
-        == "https://bucket.s3.amazonaws.com/proj/fig.png"
-    )
+    assert item["img_path_public_url"] == "https://bucket.s3.amazonaws.com/proj/fig.png"
 
 
 def test_skips_when_already_http(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv(
-        "RAGANYTHING_PUBLIC_ASSET_BASE_URL", "https://x.com"
-    )
+    monkeypatch.setenv("RAGANYTHING_PUBLIC_ASSET_BASE_URL", "https://x.com")
     monkeypatch.setenv("RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX", "/var")
 
     item = {"img_path": "https://cdn/a.png"}
@@ -73,3 +75,51 @@ def test_skips_when_already_http(monkeypatch: pytest.MonkeyPatch):
 def test_all_media_fields_documented():
     # Guardrail so new parser fields stay in sync with attach_public_media_urls
     assert "img_path" in MEDIA_PATH_FIELDS
+
+
+def test_warns_once_when_only_base_url_is_set(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    monkeypatch.setenv("RAGANYTHING_PUBLIC_ASSET_BASE_URL", "https://x.com")
+    monkeypatch.delenv("RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX", raising=False)
+
+    item = {"img_path": "/var/rag/out/a.png"}
+    with caplog.at_level(logging.WARNING, logger="raganything.asset_urls"):
+        attach_public_media_urls(item)
+        attach_public_media_urls(item)
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "STRIP_PREFIX" in warnings[0].getMessage()
+    assert "img_path_public_url" not in item
+
+
+def test_warns_once_when_only_strip_prefix_is_set(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    monkeypatch.delenv("RAGANYTHING_PUBLIC_ASSET_BASE_URL", raising=False)
+    monkeypatch.setenv("RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX", "/var")
+
+    item = {"img_path": "/var/a.png"}
+    with caplog.at_level(logging.WARNING, logger="raganything.asset_urls"):
+        attach_public_media_urls(item)
+        attach_public_media_urls(item)
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "BASE_URL" in warnings[0].getMessage()
+    assert "img_path_public_url" not in item
+
+
+def test_silent_when_neither_env_is_set(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    monkeypatch.delenv("RAGANYTHING_PUBLIC_ASSET_BASE_URL", raising=False)
+    monkeypatch.delenv("RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX", raising=False)
+
+    item = {"img_path": "/var/a.png"}
+    with caplog.at_level(logging.WARNING, logger="raganything.asset_urls"):
+        attach_public_media_urls(item)
+
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert "img_path_public_url" not in item

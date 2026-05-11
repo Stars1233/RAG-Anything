@@ -1077,6 +1077,8 @@ RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX=/var/rag/output
 
 After parsing, each non-empty `img_path`, `table_img_path`, or `equation_img_path` may gain a sibling field `*_public_url` while the original path stays on disk for local processing. See [#272](https://github.com/HKUDS/RAG-Anything/issues/272).
 
+> **Scope today**: this mapping runs in the MinerU parser path only. Other parsers (e.g. Docling) keep working but will not produce `*_public_url` fields until the helper is wired into their content_list post-processing as well. If only one of the two env vars is set, RAG-Anything logs a warning and skips URL attachment.
+
 ### Parser Configuration
 
 RAGAnything now supports multiple parsers, each with specific advantages:
