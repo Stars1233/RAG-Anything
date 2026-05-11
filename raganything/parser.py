@@ -49,6 +49,8 @@ from typing import (
     Iterator,
 )
 
+from raganything.asset_urls import attach_public_media_urls
+
 _IS_WINDOWS: bool = platform.system() == "Windows"
 
 
@@ -1065,6 +1067,8 @@ class MineruParser(Parser):
                                     continue
 
                                 item[field_name] = str(absolute_img_path)
+
+                        attach_public_media_urls(item)
 
             except Exception as e:
                 cls.logger.warning(f"Could not read JSON file {json_file}: {e}")

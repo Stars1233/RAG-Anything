@@ -1060,6 +1060,25 @@ PARSE_METHOD=auto              # Parse method: auto, ocr, or txt
 
 > **Note**: API keys are only required for full RAG processing with LLM integration. The parsing test files (`office_document_test.py` and `image_format_test.py`) only test parser functionality and do not require API keys.
 
+### Troubleshooting and multimodal checklist
+
+- See **[docs/multimodal_rag_failure_modes.md](docs/multimodal_rag_failure_modes.md)** for a short checklist of common pipeline issues (OCR, tables, retrieval bias, debugging tips). Related: [#207](https://github.com/HKUDS/RAG-Anything/issues/207), [#213](https://github.com/HKUDS/RAG-Anything/issues/213).
+
+### Public media URLs (CDN / object storage)
+
+When ingestion runs on a server but your UI or another service needs **HTTPS** (or S3-style) links to figures, set:
+
+```bash
+# Base URL for assets (no trailing slash required)
+RAGANYTHING_PUBLIC_ASSET_BASE_URL=https://my-bucket.s3.us-east-1.amazonaws.com/prefix
+# Filesystem root that should be stripped from absolute paths under that tree
+RAGANYTHING_PUBLIC_ASSET_STRIP_PREFIX=/var/rag/output
+```
+
+After parsing, each non-empty `img_path`, `table_img_path`, or `equation_img_path` may gain a sibling field `*_public_url` while the original path stays on disk for local processing. See [#272](https://github.com/HKUDS/RAG-Anything/issues/272).
+
+> **Scope today**: this mapping runs in the MinerU parser path only. Other parsers (e.g. Docling) keep working but will not produce `*_public_url` fields until the helper is wired into their content_list post-processing as well. If only one of the two env vars is set, RAG-Anything logs a warning and skips URL attachment.
+
 ### Parser Configuration
 
 RAGAnything now supports multiple parsers, each with specific advantages:
