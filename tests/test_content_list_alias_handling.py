@@ -104,28 +104,43 @@ class ContentListAliasHandlingTests(unittest.TestCase):
         )
 
         self.assertEqual(get_table_body({"table_data": [["A", "B"]]}), [["A", "B"]])
-        self.assertEqual(format_table_body([["A", "B"]]), "[['A', 'B']]")
-        self.assertEqual(normalize_caption_list("Performance table"), ["Performance table"])
-        self.assertIn("['Method', 'Score']", chunk)
+        self.assertEqual(
+            format_table_body([["A", "B"], ["C", "D"]]),
+            "| A | B |\n| --- | --- |\n| C | D |",
+        )
+        self.assertEqual(format_table_body("| A | B |"), "| A | B |")
+        self.assertEqual(
+            normalize_caption_list("Performance table"), ["Performance table"]
+        )
+        self.assertIn("| Method | Score |", chunk)
+        self.assertIn("| RAGAnything | 95.2 |", chunk)
         self.assertIn("Performance table", chunk)
         self.assertNotIn("P, e, r, f", chunk)
         self.assertIn("Synthetic example", chunk)
 
     def test_equation_latex_alias_is_not_dropped_from_chunk_template(self):
         processor = ProcessorMixin()
-        item = {
-            "latex": "E = mc^2",
-            "text": "Mass-energy equivalence",
-        }
 
-        equation_text, equation_format = get_equation_text_and_format(item)
-        chunk = processor._apply_chunk_template("equation", item, "A physics equation.")
+        text_item = {"text": "E = mc^2", "text_format": "latex"}
+        equation_text, equation_format = get_equation_text_and_format(text_item)
+        self.assertEqual(equation_text, "E = mc^2")
+        self.assertEqual(equation_format, "latex")
 
-        self.assertEqual(equation_text, "E = mc^2\nDescription: Mass-energy equivalence")
-        self.assertEqual(equation_format, "LaTeX")
+        latex_only_item = {"latex": "E = mc^2"}
+        equation_text, equation_format = get_equation_text_and_format(latex_only_item)
+        self.assertEqual(equation_text, "E = mc^2")
+        self.assertEqual(equation_format, "latex")
+
+        chunk = processor._apply_chunk_template(
+            "equation", latex_only_item, "A physics equation."
+        )
         self.assertIn("E = mc^2", chunk)
-        self.assertIn("Mass-energy equivalence", chunk)
-        self.assertIn("Format: LaTeX", chunk)
+        self.assertIn("Format: latex", chunk)
+        self.assertIn("A physics equation.", chunk)
+
+        equation_alias_item = {"equation": "x^2 + y^2 = 1"}
+        equation_text, _ = get_equation_text_and_format(equation_alias_item)
+        self.assertEqual(equation_text, "x^2 + y^2 = 1")
 
 
 if __name__ == "__main__":

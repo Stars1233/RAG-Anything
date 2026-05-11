@@ -32,34 +32,58 @@ def get_table_body(item: Dict[str, Any]) -> Any:
 
 
 def format_table_body(table_body: Any) -> str:
-    """Serialize table content for prompts and chunks without dropping aliases."""
+    """Serialize table content for prompts and chunks without dropping aliases.
+
+    Strings are passed through unchanged. List-of-lists (the common
+    ``table_data`` shape from non-MinerU parsers) are rendered as a simple
+    Markdown table so the LLM sees structured rows instead of a Python repr.
+    Other shapes fall back to a newline-joined string of ``str(...)`` items.
+    """
     if isinstance(table_body, str):
         return table_body
+    if isinstance(table_body, list):
+        if not table_body:
+            return ""
+        if all(isinstance(row, (list, tuple)) for row in table_body):
+            rendered_rows = [
+                "| " + " | ".join(str(cell) for cell in row) + " |"
+                for row in table_body
+            ]
+            if len(rendered_rows) >= 1:
+                column_count = max(len(row) for row in table_body)
+                separator = "| " + " | ".join(["---"] * column_count) + " |"
+                rendered_rows.insert(1, separator)
+            return "\n".join(rendered_rows)
+        return "\n".join(str(row) for row in table_body)
     return str(table_body)
 
 
 def get_equation_text_and_format(item: Dict[str, Any]) -> Tuple[str, str]:
-    """Read equation content while preserving LaTeX aliases from content lists."""
+    """Read equation content while preserving LaTeX aliases from content lists.
+
+    Field priority follows MinerU first (``text`` + ``text_format``), then
+    falls back to ``latex`` and ``equation`` aliases used by other parsers.
+    The textual description is intentionally NOT concatenated into the
+    equation body: the ``equation_chunk`` template has a separate
+    ``enhanced_caption`` slot for that.
+    """
     text = str(item.get("text", "") or "").strip()
     latex = str(item.get("latex", "") or "").strip()
     equation = str(item.get("equation", "") or "").strip()
     equation_format = str(item.get("text_format", "") or "").strip()
 
-    parts = []
-    if latex:
-        parts.append(latex)
+    if text:
+        equation_text = text
+    elif latex:
+        equation_text = latex
         if not equation_format:
-            equation_format = "LaTeX"
+            equation_format = "latex"
     elif equation:
-        parts.append(equation)
+        equation_text = equation
+    else:
+        equation_text = ""
 
-    if text and text not in parts:
-        if parts:
-            parts.append(f"Description: {text}")
-        else:
-            parts.append(text)
-
-    return "\n".join(parts), equation_format
+    return equation_text, equation_format
 
 
 def separate_content(
