@@ -24,7 +24,9 @@ def _install_minimal_lightrag_stubs():
     fake_lightrag.LightRAG = object
     fake_lightrag_utils = types.ModuleType("lightrag.utils")
     fake_lightrag_utils.compute_mdhash_id = lambda content, prefix="": f"{prefix}fake"
-    fake_lightrag_utils.get_env_value = lambda key, default=None, value_type=str: default
+    fake_lightrag_utils.get_env_value = (
+        lambda key, default=None, value_type=str: default
+    )
     fake_lightrag_utils.logger = FakeLogger()
     sys.modules["lightrag"] = fake_lightrag
     sys.modules["lightrag.utils"] = fake_lightrag_utils
@@ -136,9 +138,12 @@ def test_insert_content_list_defers_status_until_after_text_insert():
     assert processor.lightrag.doc_status.records["doc-content-list"]["status"] == (
         DocStatus.PROCESSED
     )
-    assert processor.lightrag.doc_status.records["doc-content-list"][
-        "multimodal_processed"
-    ] is True
+    assert (
+        processor.lightrag.doc_status.records["doc-content-list"][
+            "multimodal_processed"
+        ]
+        is True
+    )
 
 
 def test_insert_content_list_keeps_status_for_multimodal_only_content():
