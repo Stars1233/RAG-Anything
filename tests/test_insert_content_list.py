@@ -106,12 +106,20 @@ class DummyProcessor(ProcessorMixin):
         self.config = SimpleNamespace(
             content_format="mineru",
             display_content_stats=False,
+            parse_method="auto",
+            parser_output_dir="./output",
             use_full_path=False,
         )
         self.callback_manager = None
+        self.parsed_content_list = []
 
     async def _ensure_lightrag_initialized(self):
         return {"success": True}
+
+    async def parse_document(
+        self, file_path, output_dir, parse_method, display_stats, **kwargs
+    ):
+        return self.parsed_content_list, "doc-complete"
 
     def _generate_content_based_doc_id(self, content_list):
         return "doc-content-list"
@@ -144,6 +152,45 @@ def test_insert_content_list_defers_status_until_after_text_insert():
         ]
         is True
     )
+
+
+def test_process_document_complete_defers_status_until_after_text_insert():
+    processor = DummyProcessor()
+    processor.parsed_content_list = [
+        {"type": "text", "text": "hello from parsed document", "page_idx": 0}
+    ]
+
+    asyncio.run(processor.process_document_complete("/tmp/source.pdf"))
+
+    assert processor.events[0] == (
+        "ainsert",
+        "doc-complete",
+        "hello from parsed document",
+    )
+    assert processor.lightrag.doc_status.records["doc-complete"]["status"] == (
+        DocStatus.PROCESSED
+    )
+    assert (
+        processor.lightrag.doc_status.records["doc-complete"]["multimodal_processed"]
+        is True
+    )
+
+
+def test_process_document_complete_keeps_status_for_multimodal_only_content():
+    processor = DummyProcessor()
+    processor.parsed_content_list = [
+        {"type": "image", "img_path": "/tmp/image.png", "page_idx": 0}
+    ]
+
+    asyncio.run(processor.process_document_complete("/tmp/source.pdf"))
+
+    assert processor.events[0] == ("doc_status", "doc-complete", DocStatus.READY)
+    assert processor.events[1] == (
+        "doc_status",
+        "doc-complete",
+        DocStatus.HANDLING,
+    )
+    assert processor.events[2] == ("multimodal", "doc-complete", "source.pdf")
 
 
 def test_insert_content_list_keeps_status_for_multimodal_only_content():

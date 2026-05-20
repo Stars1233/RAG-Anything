@@ -1708,15 +1708,20 @@ class ProcessorMixin:
             if doc_id is None:
                 doc_id = content_based_doc_id
 
-            await self._upsert_doc_status(
-                doc_id,
-                file_name,
-                status=DocStatus.HANDLING,
-                error_msg="",
-            )
-
             # Step 2: Separate text and multimodal content
             text_content, multimodal_items = separate_content(content_list)
+
+            # LightRAG creates the initial doc_status entry during text insertion.
+            # Pre-registering the same doc_id here makes LightRAG treat a fresh
+            # document insert as a duplicate, so only create the record up front
+            # for multimodal-only content that will not call ainsert().
+            if not text_content.strip():
+                await self._upsert_doc_status(
+                    doc_id,
+                    file_name,
+                    status=DocStatus.HANDLING,
+                    error_msg="",
+                )
 
             # Step 2.5: Set content source for context extraction in multimodal processing
             if hasattr(self, "set_content_source_for_context") and multimodal_items:
@@ -1745,6 +1750,12 @@ class ProcessorMixin:
                     split_by_character=split_by_character,
                     split_by_character_only=split_by_character_only,
                     ids=doc_id,
+                )
+                await self._upsert_doc_status(
+                    doc_id,
+                    file_name,
+                    status=DocStatus.HANDLING,
+                    error_msg="",
                 )
                 if callback_manager is not None:
                     insert_duration = time.time() - insert_start
