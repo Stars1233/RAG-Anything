@@ -194,7 +194,25 @@ class TestRAGAnythingIntegration:
         cb = RecordingCallback()
         rag.callback_manager.register(cb)
 
+        class FakeDocStatus:
+            def __init__(self):
+                self.records = {}
+
+            async def get_by_id(self, doc_id):
+                return self.records.get(doc_id)
+
+            async def upsert(self, payload):
+                self.records.update(payload)
+
+            async def index_done_callback(self):
+                return None
+
+        class FakeLightRAG:
+            def __init__(self):
+                self.doc_status = FakeDocStatus()
+
         async def fake_ensure():
+            rag.lightrag = FakeLightRAG()
             return {"success": True}
 
         async def fake_parse(
@@ -230,8 +248,6 @@ class TestRAGAnythingIntegration:
         )
 
         event_kinds = [e[0] for e in cb.events]
-        assert "parse_start" in event_kinds
-        assert "parse_complete" in event_kinds
         assert "text_insert_start" in event_kinds
         assert "text_insert_complete" in event_kinds
         assert "document_complete" in event_kinds

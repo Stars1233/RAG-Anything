@@ -103,11 +103,13 @@ PROMPTS[
 }}
 
 Additional context:
+- Section Path: {section_path}
 - Image Path: {image_path}
 - Captions: {captions}
 - Footnotes: {footnotes}
 
-Focus on providing accurate, detailed visual analysis that would be useful for knowledge retrieval."""
+Focus on providing accurate, detailed visual analysis that would be useful for knowledge retrieval.
+Use a semantic entity_name; do not return file names or figure numbers such as figure_30_1 unless they are the actual title."""
 
 # Image analysis prompt with context support
 PROMPTS[
@@ -134,12 +136,16 @@ PROMPTS[
 Context from surrounding content:
 {context}
 
+Document structure:
+- Section Path: {section_path}
+
 Image details:
 - Image Path: {image_path}
 - Captions: {captions}
 - Footnotes: {footnotes}
 
-Focus on providing accurate, detailed visual analysis that incorporates the context and would be useful for knowledge retrieval."""
+Focus on providing accurate, detailed visual analysis that incorporates the context and would be useful for knowledge retrieval.
+Use a semantic entity_name; do not return file names or figure numbers such as figure_30_1 unless they are the actual title."""
 
 # Image analysis prompt with text fallback
 PROMPTS["text_prompt"] = """Based on the following image information, provide analysis:
@@ -327,6 +333,8 @@ Focus on extracting meaningful information that would be useful for knowledge re
 # Modal chunk templates
 PROMPTS["image_chunk"] = """
 Image Content Analysis:
+- Section Path: {section_path}
+- Neighbor Text: {neighbor_text}
 Image Path: {image_path}
 Captions: {captions}
 Footnotes: {footnotes}

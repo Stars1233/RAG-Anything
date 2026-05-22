@@ -4,6 +4,8 @@ Document processing functionality for RAGAnything
 Contains methods for parsing documents and processing multimodal content
 """
 
+from __future__ import annotations
+
 import os
 import time
 import hashlib
@@ -1133,8 +1135,12 @@ class ProcessorMixin:
                         "image_footnote", original_item.get("img_footnote", [])
                     )
                 )
+                section_path = original_item.get("_section_path", "")
+                neighbor_text = original_item.get("_neighbor_text", "")
 
                 return PROMPTS["image_chunk"].format(
+                    section_path=section_path if section_path else "None",
+                    neighbor_text=neighbor_text if neighbor_text else "None",
                     image_path=image_path,
                     captions=", ".join(captions) if captions else "None",
                     footnotes=", ".join(footnotes) if footnotes else "None",

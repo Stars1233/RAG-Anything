@@ -894,6 +894,7 @@ class ImageModalProcessor(BaseModalProcessor):
             footnotes = content_data.get(
                 "image_footnote", content_data.get("img_footnote", [])
             )
+            section_path = content_data.get("_section_path", "")
 
             # Validate image path
             if not image_path:
@@ -917,6 +918,7 @@ class ImageModalProcessor(BaseModalProcessor):
                     "vision_prompt_with_context", PROMPTS["vision_prompt"]
                 ).format(
                     context=context,
+                    section_path=section_path if section_path else "None",
                     entity_name=entity_name
                     if entity_name
                     else "unique descriptive name for this image",
@@ -926,6 +928,7 @@ class ImageModalProcessor(BaseModalProcessor):
                 )
             else:
                 vision_prompt = PROMPTS["vision_prompt"].format(
+                    section_path=section_path if section_path else "None",
                     entity_name=entity_name
                     if entity_name
                     else "unique descriptive name for this image",
@@ -997,8 +1000,12 @@ class ImageModalProcessor(BaseModalProcessor):
             footnotes = content_data.get(
                 "image_footnote", content_data.get("img_footnote", [])
             )
+            section_path = content_data.get("_section_path", "")
+            neighbor_text = content_data.get("_neighbor_text", "")
 
             modal_chunk = PROMPTS["image_chunk"].format(
+                section_path=section_path if section_path else "None",
+                neighbor_text=neighbor_text if neighbor_text else "None",
                 image_path=image_path,
                 captions=", ".join(captions) if captions else "None",
                 footnotes=", ".join(footnotes) if footnotes else "None",
