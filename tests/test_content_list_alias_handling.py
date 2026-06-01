@@ -188,7 +188,9 @@ class ContentListAliasHandlingTests(unittest.TestCase):
         )
 
         self.assertIn("Section Path: 2 Method > 2.1 Setup", chunk)
-        self.assertIn("Neighbor Text: setup details before image discussion after image", chunk)
+        self.assertIn(
+            "Neighbor Text: setup details before image discussion after image", chunk
+        )
         self.assertIn("A line chart comparing model variants.", chunk)
 
     def test_section_and_neighbor_helpers_handle_invalid_indices(self):
