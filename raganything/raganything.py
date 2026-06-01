@@ -454,7 +454,9 @@ class RAGAnything(QueryMixin, ProcessorMixin, BatchMixin):
                 self.logger.debug("Scheduled multimodal status cache finalization")
 
             # Finalize LightRAG storages if LightRAG is initialized
-            if self.lightrag is not None:
+            if self.lightrag is not None and hasattr(
+                self.lightrag, "finalize_storages"
+            ):
                 tasks.append(self.lightrag.finalize_storages())
                 self.logger.debug("Scheduled LightRAG storages finalization")
 

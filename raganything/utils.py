@@ -4,6 +4,8 @@ Utility functions for RAGAnything
 Contains helper functions for content separation, text insertion, and other utilities
 """
 
+from __future__ import annotations
+
 import base64
 import inspect
 from typing import Dict, List, Any, Tuple
@@ -86,6 +88,87 @@ def get_equation_text_and_format(item: Dict[str, Any]) -> Tuple[str, str]:
     return equation_text, equation_format
 
 
+def extract_section_path_from_content_list(
+    content_list: List[Dict[str, Any]], current_index: int
+) -> str:
+    """Build a hierarchical section path from preceding heading blocks.
+
+    MinerU content lists keep document order, and heading blocks are exposed as
+    text items with a positive ``text_level``.  For a given item index, we walk
+    the preceding items and keep the latest heading at each level to reconstruct
+    a stable chapter/section path such as ``Introduction > Method > Ablation``.
+    """
+    if not content_list or current_index is None:
+        return ""
+
+    try:
+        limit = max(0, int(current_index))
+    except (TypeError, ValueError):
+        return ""
+
+    heading_chain: List[Tuple[int, str]] = []
+
+    for item in content_list[:limit]:
+        if not isinstance(item, dict):
+            continue
+
+        if item.get("type", "text") != "text":
+            continue
+
+        text = str(item.get("text", "") or "").strip()
+        if not text:
+            continue
+
+        try:
+            level = int(item.get("text_level", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+
+        if level <= 0:
+            continue
+
+        while heading_chain and heading_chain[-1][0] >= level:
+            heading_chain.pop()
+        heading_chain.append((level, text))
+
+    return " > ".join(text for _, text in heading_chain)
+
+
+def extract_neighbor_text_from_content_list(
+    content_list: List[Dict[str, Any]], current_index: int, window_size: int = 3
+) -> str:
+    """Collect nearby text blocks around an item index from MinerU content list."""
+    if not content_list or current_index is None:
+        return ""
+
+    try:
+        idx = int(current_index)
+    except (TypeError, ValueError):
+        return ""
+
+    if idx < 0 or idx >= len(content_list):
+        return ""
+
+    start_idx = max(0, idx - window_size)
+    end_idx = min(len(content_list), idx + window_size + 1)
+
+    parts: List[str] = []
+    for pos in range(start_idx, end_idx):
+        if pos == idx:
+            continue
+        item = content_list[pos]
+        if not isinstance(item, dict):
+            continue
+        if item.get("type", "text") != "text":
+            continue
+
+        text = str(item.get("text", "") or "").strip()
+        if text:
+            parts.append(text)
+
+    return " ".join(parts)
+
+
 def separate_content(
     content_list: List[Dict[str, Any]],
 ) -> Tuple[str, List[Dict[str, Any]]]:
@@ -113,6 +196,15 @@ def separate_content(
             # Multimodal content (image, table, equation, etc.)
             multimodal_item = dict(item)
             multimodal_item.setdefault("_content_list_index", index)
+            if content_type == "image":
+                multimodal_item.setdefault(
+                    "_section_path",
+                    extract_section_path_from_content_list(content_list, index),
+                )
+                multimodal_item.setdefault(
+                    "_neighbor_text",
+                    extract_neighbor_text_from_content_list(content_list, index),
+                )
             multimodal_items.append(multimodal_item)
 
     # Merge all text content

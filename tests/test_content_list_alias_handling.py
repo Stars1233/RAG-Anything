@@ -75,6 +75,12 @@ get_equation_text_and_format = utils_module.get_equation_text_and_format
 get_table_body = utils_module.get_table_body
 normalize_caption_list = utils_module.normalize_caption_list
 separate_content = utils_module.separate_content
+extract_section_path_from_content_list = (
+    utils_module.extract_section_path_from_content_list
+)
+extract_neighbor_text_from_content_list = (
+    utils_module.extract_neighbor_text_from_content_list
+)
 
 
 class ContentListAliasHandlingTests(unittest.TestCase):
@@ -141,6 +147,54 @@ class ContentListAliasHandlingTests(unittest.TestCase):
         equation_alias_item = {"equation": "x^2 + y^2 = 1"}
         equation_text, _ = get_equation_text_and_format(equation_alias_item)
         self.assertEqual(equation_text, "x^2 + y^2 = 1")
+
+    def test_image_items_get_section_path_and_neighbor_text_metadata(self):
+        content = [
+            {"type": "text", "text": "1 Introduction", "text_level": 1},
+            {"type": "text", "text": "background paragraph"},
+            {"type": "text", "text": "2 Method", "text_level": 1},
+            {"type": "text", "text": "2.1 Setup", "text_level": 2},
+            {"type": "text", "text": "setup details before image"},
+            {
+                "type": "image",
+                "img_path": "/tmp/figure_30_1.png",
+                "image_caption": ["Figure 30.1 Ablation curve"],
+            },
+            {"type": "text", "text": "discussion after image"},
+        ]
+
+        _, multimodal = separate_content(content)
+        image_item = multimodal[0]
+
+        self.assertEqual(
+            image_item["_section_path"],
+            "2 Method > 2.1 Setup",
+        )
+        self.assertIn("setup details before image", image_item["_neighbor_text"])
+        self.assertIn("discussion after image", image_item["_neighbor_text"])
+
+    def test_image_chunk_template_includes_section_and_neighbor_text(self):
+        processor = ProcessorMixin()
+        chunk = processor._apply_chunk_template(
+            "image",
+            {
+                "img_path": "/tmp/figure_30_1.png",
+                "image_caption": "Figure 30.1 Ablation curve",
+                "image_footnote": "Synthetic sample",
+                "_section_path": "2 Method > 2.1 Setup",
+                "_neighbor_text": "setup details before image discussion after image",
+            },
+            "A line chart comparing model variants.",
+        )
+
+        self.assertIn("Section Path: 2 Method > 2.1 Setup", chunk)
+        self.assertIn("Neighbor Text: setup details before image discussion after image", chunk)
+        self.assertIn("A line chart comparing model variants.", chunk)
+
+    def test_section_and_neighbor_helpers_handle_invalid_indices(self):
+        content = [{"type": "text", "text": "1 Intro", "text_level": 1}]
+        self.assertEqual(extract_section_path_from_content_list(content, -1), "")
+        self.assertEqual(extract_neighbor_text_from_content_list(content, 99), "")
 
 
 if __name__ == "__main__":
