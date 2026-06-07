@@ -23,7 +23,9 @@ Usage:
 import pytest
 from unittest.mock import patch, MagicMock
 import os
+import re
 from raganything.parser import MineruParser, DoclingParser
+import raganything.parser as parser_module
 
 
 @pytest.fixture
@@ -153,6 +155,92 @@ def test_invalid_env_contents(mineru_parser, docling_parser, dummy_path, tmp_pat
             file_stem="stem",
             env={"key": 123},
         )
+
+
+def test_mineru_windows_unsafe_pdf_uses_safe_paths(
+    monkeypatch, mineru_parser, tmp_path
+):
+    monkeypatch.setattr(parser_module, "_IS_WINDOWS", True)
+    source_dir = tmp_path / "docs"
+    source_dir.mkdir()
+    pdf_path = source_dir / "sample-测试 .pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+
+    captured = {}
+
+    def fake_run_mineru_command(**kwargs):
+        captured.update(kwargs)
+        assert kwargs["input_path"].exists()
+        assert kwargs["input_path"].read_bytes() == b"%PDF-1.4\n"
+
+    with patch.object(
+        MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
+    ), patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read:
+        mineru_parser.parse_pdf(pdf_path, output_dir=tmp_path / "out")
+
+    input_path = captured["input_path"]
+    output_dir = captured["output_dir"]
+    assert re.fullmatch(r"input_[0-9a-f]{10}\.pdf", input_path.name)
+    assert re.fullmatch(r"mineru_[0-9a-f]{10}", output_dir.name)
+    assert input_path.name.isascii()
+    assert output_dir.name.isascii()
+    assert read.call_args.args[1] == input_path.stem
+
+
+def test_mineru_windows_safe_pdf_keeps_original_path(
+    monkeypatch, mineru_parser, tmp_path
+):
+    monkeypatch.setattr(parser_module, "_IS_WINDOWS", True)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    output_dir = tmp_path / "out"
+
+    captured = {}
+
+    def fake_run_mineru_command(**kwargs):
+        captured.update(kwargs)
+
+    with patch.object(
+        MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
+    ), patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read:
+        mineru_parser.parse_pdf(pdf_path, output_dir=output_dir)
+
+    assert captured["input_path"] == pdf_path
+    assert captured["output_dir"] == MineruParser._unique_output_dir(
+        output_dir, pdf_path
+    )
+    assert read.call_args.args[1] == "sample"
+
+
+def test_mineru_windows_unsafe_png_uses_safe_paths(
+    monkeypatch, mineru_parser, tmp_path
+):
+    monkeypatch.setattr(parser_module, "_IS_WINDOWS", True)
+    source_dir = tmp_path / "docs"
+    source_dir.mkdir()
+    image_path = source_dir / "sample-测试 .png"
+    image_path.write_bytes(b"\x89PNG\r\n")
+
+    captured = {}
+
+    def fake_run_mineru_command(**kwargs):
+        captured.update(kwargs)
+        assert kwargs["method"] == "ocr"
+        assert kwargs["input_path"].exists()
+        assert kwargs["input_path"].read_bytes() == b"\x89PNG\r\n"
+
+    with patch.object(
+        MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
+    ), patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read:
+        mineru_parser.parse_image(image_path, output_dir=tmp_path / "out")
+
+    input_path = captured["input_path"]
+    output_dir = captured["output_dir"]
+    assert re.fullmatch(r"input_[0-9a-f]{10}\.png", input_path.name)
+    assert re.fullmatch(r"mineru_[0-9a-f]{10}", output_dir.name)
+    assert input_path.name.isascii()
+    assert output_dir.name.isascii()
+    assert read.call_args.args[1] == input_path.stem
 
 
 @patch.object(DoclingParser, "_get_converter")
