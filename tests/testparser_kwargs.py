@@ -173,9 +173,12 @@ def test_mineru_windows_unsafe_pdf_uses_safe_paths(
         assert kwargs["input_path"].exists()
         assert kwargs["input_path"].read_bytes() == b"%PDF-1.4\n"
 
-    with patch.object(
-        MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
-    ), patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read:
+    with (
+        patch.object(
+            MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
+        ),
+        patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read,
+    ):
         mineru_parser.parse_pdf(pdf_path, output_dir=tmp_path / "out")
 
     input_path = captured["input_path"]
@@ -200,9 +203,12 @@ def test_mineru_windows_safe_pdf_keeps_original_path(
     def fake_run_mineru_command(**kwargs):
         captured.update(kwargs)
 
-    with patch.object(
-        MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
-    ), patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read:
+    with (
+        patch.object(
+            MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
+        ),
+        patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read,
+    ):
         mineru_parser.parse_pdf(pdf_path, output_dir=output_dir)
 
     assert captured["input_path"] == pdf_path
@@ -229,9 +235,12 @@ def test_mineru_windows_unsafe_png_uses_safe_paths(
         assert kwargs["input_path"].exists()
         assert kwargs["input_path"].read_bytes() == b"\x89PNG\r\n"
 
-    with patch.object(
-        MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
-    ), patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read:
+    with (
+        patch.object(
+            MineruParser, "_run_mineru_command", side_effect=fake_run_mineru_command
+        ),
+        patch.object(MineruParser, "_read_output_files", return_value=([], "")) as read,
+    ):
         mineru_parser.parse_image(image_path, output_dir=tmp_path / "out")
 
     input_path = captured["input_path"]
