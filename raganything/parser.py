@@ -711,6 +711,80 @@ class MineruParser(Parser):
         super().__init__()
 
     @classmethod
+    def _is_mineru_unsafe_windows_path(cls, path: Union[str, Path]) -> bool:
+        if not _IS_WINDOWS:
+            return False
+
+        path = Path(path)
+        path_text = str(path)
+        try:
+            path_text.encode("ascii")
+        except UnicodeEncodeError:
+            return True
+
+        return any(
+            part.endswith((" ", ".")) for part in path.parts
+        ) or path.stem.endswith((" ", "."))
+
+    @classmethod
+    def _mineru_safe_path_hash(cls, path: Union[str, Path]) -> str:
+        path_text = str(Path(path).resolve())
+        return hashlib.md5(path_text.encode("utf-8")).hexdigest()[:10]
+
+    @classmethod
+    def _prepare_mineru_paths(
+        cls,
+        input_path: Union[str, Path],
+        output_dir: Union[str, Path],
+        hash_path: Optional[Union[str, Path]] = None,
+    ) -> Tuple[Path, Path, str, Optional[Path]]:
+        input_path = Path(input_path)
+        output_dir = Path(output_dir)
+        hash_source = Path(hash_path) if hash_path is not None else input_path
+
+        input_is_unsafe = cls._is_mineru_unsafe_windows_path(input_path)
+        output_is_unsafe = cls._is_mineru_unsafe_windows_path(output_dir)
+        if not input_is_unsafe and not output_is_unsafe:
+            return input_path, output_dir, input_path.stem, None
+
+        path_hash = cls._mineru_safe_path_hash(hash_source)
+        temp_dir = Path(tempfile.mkdtemp(prefix="raganything_mineru_"))
+
+        mineru_input_path = input_path
+        if input_is_unsafe:
+            suffix = input_path.suffix.lower()
+            mineru_input_path = temp_dir / f"input_{path_hash}{suffix}"
+            shutil.copy2(input_path, mineru_input_path)
+
+        mineru_output_dir = output_dir
+        if output_is_unsafe:
+            mineru_output_dir = temp_dir / f"mineru_{path_hash}"
+            mineru_output_dir.mkdir(parents=True, exist_ok=True)
+
+        return mineru_input_path, mineru_output_dir, mineru_input_path.stem, temp_dir
+
+    @classmethod
+    def _copy_mineru_output_tree(cls, source_dir: Path, target_dir: Path) -> None:
+        if source_dir == target_dir:
+            return
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        if not source_dir.exists():
+            return
+
+        for item in source_dir.iterdir():
+            target = target_dir / item.name
+            if item.is_dir():
+                shutil.copytree(item, target, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, target)
+
+    @classmethod
+    def _cleanup_mineru_temp_dir(cls, temp_dir: Optional[Path]) -> None:
+        if temp_dir is not None and temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    @classmethod
     def _run_mineru_command(
         cls,
         input_path: Union[str, Path],
@@ -1102,8 +1176,6 @@ class MineruParser(Parser):
             if not pdf_path.exists():
                 raise FileNotFoundError(f"PDF file does not exist: {pdf_path}")
 
-            name_without_suff = pdf_path.stem
-
             # Prepare output directory — use unique subdirectory to prevent
             # same-name file collisions when output_dir is shared (#51)
             if output_dir:
@@ -1113,34 +1185,43 @@ class MineruParser(Parser):
 
             base_output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Run mineru command
-            self._run_mineru_command(
-                input_path=pdf_path,
-                output_dir=base_output_dir,
-                method=method,
-                lang=lang,
-                **kwargs,
+            mineru_input_path, mineru_output_dir, file_stem, temp_dir = (
+                self._prepare_mineru_paths(pdf_path, base_output_dir)
             )
 
-            # Read the generated output files
-            # Map backend to expected output directory name for better compatibility
-            # MinerU 2.7.0+ uses different directory names based on backend:
-            # - pipeline -> auto/
-            # - vlm-* -> vlm/
-            # - hybrid-* -> hybrid_auto/
-            # Note: _read_output_files() will scan subdirectories automatically,
-            # so this mapping is just for optimization and fallback
-            # Use `or ""` to handle both missing keys and explicit None values
-            backend = kwargs.get("backend") or ""
-            if backend.startswith("vlm-"):
-                method = "vlm"
-            elif backend.startswith("hybrid-"):
-                method = "hybrid_auto"
+            try:
+                # Run mineru command
+                self._run_mineru_command(
+                    input_path=mineru_input_path,
+                    output_dir=mineru_output_dir,
+                    method=method,
+                    lang=lang,
+                    **kwargs,
+                )
 
-            content_list, _ = self._read_output_files(
-                base_output_dir, name_without_suff, method=method
-            )
-            return content_list
+                self._copy_mineru_output_tree(mineru_output_dir, base_output_dir)
+
+                # Read the generated output files
+                # Map backend to expected output directory name for better compatibility
+                # MinerU 2.7.0+ uses different directory names based on backend:
+                # - pipeline -> auto/
+                # - vlm-* -> vlm/
+                # - hybrid-* -> hybrid_auto/
+                # Note: _read_output_files() will scan subdirectories automatically,
+                # so this mapping is just for optimization and fallback
+                # Use `or ""` to handle both missing keys and explicit None values
+                backend = kwargs.get("backend") or ""
+                if backend.startswith("vlm-"):
+                    method = "vlm"
+                elif backend.startswith("hybrid-"):
+                    method = "hybrid_auto"
+
+                content_list, _ = self._read_output_files(
+                    base_output_dir, file_stem, method=method
+                )
+                return content_list
+            finally:
+                self._cleanup_mineru_temp_dir(temp_dir)
 
         except MineruExecutionError:
             raise
@@ -1256,8 +1337,6 @@ class MineruParser(Parser):
                         f"Failed to convert image {image_path.name}: {str(e)}"
                     )
 
-            name_without_suff = image_path.stem
-
             # Prepare output directory — use unique subdirectory to prevent
             # same-name file collisions when output_dir is shared (#51)
             if output_dir:
@@ -1267,19 +1346,27 @@ class MineruParser(Parser):
 
             base_output_dir.mkdir(parents=True, exist_ok=True)
 
+            mineru_input_path, mineru_output_dir, file_stem, mineru_temp_dir = (
+                self._prepare_mineru_paths(
+                    actual_image_path, base_output_dir, hash_path=image_path
+                )
+            )
+
             try:
                 # Run mineru command (images are processed with OCR method)
                 self._run_mineru_command(
-                    input_path=actual_image_path,
-                    output_dir=base_output_dir,
+                    input_path=mineru_input_path,
+                    output_dir=mineru_output_dir,
                     method="ocr",  # Images require OCR method
                     lang=lang,
                     **kwargs,
                 )
 
+                self._copy_mineru_output_tree(mineru_output_dir, base_output_dir)
+
                 # Read the generated output files
                 content_list, _ = self._read_output_files(
-                    base_output_dir, name_without_suff, method="ocr"
+                    base_output_dir, file_stem, method="ocr"
                 )
                 return content_list
 
@@ -1287,6 +1374,8 @@ class MineruParser(Parser):
                 raise
 
             finally:
+                self._cleanup_mineru_temp_dir(mineru_temp_dir)
+
                 # Clean up temporary converted file if it was created
                 if temp_converted_file and temp_converted_file.exists():
                     try:
